@@ -284,7 +284,7 @@ export default function POSPage() {
       resetForm();
       
       // Auto-print thermal receipt
-      const printUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
+      const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
       const printWindow = window.open(printUrl, '_blank');
       if(printWindow) {
         printWindow.onload = () => printWindow.print();
