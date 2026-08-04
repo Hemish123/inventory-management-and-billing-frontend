@@ -32,7 +32,8 @@ export default function BillsPage() {
 
   const filtered = bills.filter(b =>
     b.bill_number?.toLowerCase().includes(search.toLowerCase()) ||
-    b.customer_name?.toLowerCase().includes(search.toLowerCase())
+    b.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
+    b.cashier_name?.toLowerCase().includes(search.toLowerCase())
   );
 
   const columns = [
@@ -41,6 +42,9 @@ export default function BillsPage() {
     )},
     { key: 'customer_name', label: 'Customer', sortable: true },
     { key: 'branch_name', label: 'Branch', sortable: true },
+    { key: 'cashier_name', label: 'Cashier', sortable: true, render: v => v ? (
+      <span className="text-xs text-slate-500 font-medium">{v}</span>
+    ) : <span className="text-slate-300">—</span> },
     { key: 'grand_total', label: 'Total', sortable: true, render: v => formatCurrency(v) },
     { key: 'payment_method', label: 'Payment', sortable: true, render: v => (
       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{v}</span>
@@ -77,7 +81,7 @@ export default function BillsPage() {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search bills..." className="input-field pl-10" />
+            placeholder="Search by bill, customer, or cashier..." className="input-field pl-10" />
         </div>
         <div className="glass-card overflow-hidden">
           {loading ? <div className="p-6"><SkeletonTable rows={8} cols={7} /></div> : (
