@@ -126,7 +126,9 @@ export default function Sidebar() {
 
       {/* Nav Items */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        {navItems.map(renderNavItem)}
+        {navItems
+          .filter(item => !(user?.role_name === 'EMPLOYEE' && item.path === '/users'))
+          .map(renderNavItem)}
 
         {/* Settings */}
         <div className="pt-2">

@@ -3,11 +3,14 @@ import Navbar from '../../components/common/Navbar';
 import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
+import { useAuth } from '../../hooks/useAuth';
 import { getBranches, createBranch, deleteBranch } from '../../api/coreAPI';
 import { Plus, Trash2, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function BranchesPage() {
+  const { user } = useAuth();
+  const isEmployee = user?.role_name === 'EMPLOYEE';
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -57,10 +60,12 @@ export default function BranchesPage() {
     { key: 'email', label: 'Email' },
     { key: 'staff_count', label: 'Staff', render: v => <span className="font-semibold">{v || 0}</span> },
     { key: 'actions', label: '', render: (_, row) => (
-      <button onClick={(e) => handleDelete(e, row.id, row.name)}
-        className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors">
-        <Trash2 className="w-4 h-4" />
-      </button>
+      !isEmployee && (
+        <button onClick={(e) => handleDelete(e, row.id, row.name)}
+          className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )
     )},
   ];
 
@@ -68,10 +73,12 @@ export default function BranchesPage() {
     <div className="flex-1 overflow-y-auto">
       <Navbar title="Branches" />
       <div className="p-6 space-y-6">
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-violet-700 text-white rounded-xl text-sm font-semibold hover:from-violet-700 hover:to-violet-800 transition-all shadow-lg shadow-violet-500/20">
-          <Plus className="w-4 h-4" /> Add Branch
-        </button>
+        {!isEmployee && (
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-violet-700 text-white rounded-xl text-sm font-semibold hover:from-violet-700 hover:to-violet-800 transition-all shadow-lg shadow-violet-500/20">
+            <Plus className="w-4 h-4" /> Add Branch
+          </button>
+        )}
         <div className="glass-card overflow-hidden">
           {loading ? <div className="p-6"><SkeletonTable rows={4} cols={6} /></div> : (
             <Table columns={columns} data={branches} />

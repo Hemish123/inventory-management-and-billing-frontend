@@ -4,6 +4,7 @@ import Navbar from '../../components/common/Navbar';
 import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
+import { useAuth } from '../../hooks/useAuth';
 import { getProducts, createProduct, deleteProduct, getCategories, createCategory, getBrands, createBrand, getProductStock } from '../../api/productsAPI';
 import { getSuppliers } from '../../api/productsAPI';
 import { formatCurrency } from '../../utils/formatters';
@@ -13,6 +14,8 @@ import Barcode from 'react-barcode';
 import html2pdf from 'html2pdf.js';
 
 export default function ProductsPage() {
+  const { user } = useAuth();
+  const isEmployee = user?.role_name === 'EMPLOYEE';
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -148,10 +151,12 @@ export default function ProductsPage() {
     )},
     { key: 'actions', label: '', render: (_, row) => (
       <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-        <button onClick={(e) => handleDelete(e, row.id, row.name)}
-          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {!isEmployee && (
+          <button onClick={(e) => handleDelete(e, row.id, row.name)}
+            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
     )},
   ];
@@ -173,10 +178,12 @@ export default function ProductsPage() {
                 <Printer className="w-4 h-4" /> {printing ? 'Generating...' : `Print Barcodes (${selectedProducts.length})`}
               </button>
             )}
-            <button onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
-              <Plus className="w-4 h-4" /> Add Product
-            </button>
+            {!isEmployee && (
+              <button onClick={() => setShowModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
+                <Plus className="w-4 h-4" /> Add Product
+              </button>
+            )}
           </div>
         </div>
 
