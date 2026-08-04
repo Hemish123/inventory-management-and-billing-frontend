@@ -131,12 +131,12 @@ export default function Login() {
               {isRegister && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-500 mb-1 block font-medium">First Name</label>
+                    <label className="text-xs text-slate-500 mb-1 block font-medium">First Name *</label>
                     <input name="first_name" value={form.first_name} onChange={onChange}
                       className="input-field" placeholder="Rajesh" />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-500 mb-1 block font-medium">Last Name</label>
+                    <label className="text-xs text-slate-500 mb-1 block font-medium">Last Name *</label>
                     <input name="last_name" value={form.last_name} onChange={onChange}
                       className="input-field" placeholder="Kumar" />
                   </div>
@@ -147,7 +147,7 @@ export default function Login() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-slate-500 mb-1 block font-medium">Company Name</label>
+                      <label className="text-xs text-slate-500 mb-1 block font-medium">Company Name *</label>
                       <input name="company_name" value={form.company_name} onChange={onChange}
                         className="input-field" placeholder="Your MSME Name" />
                     </div>
@@ -211,13 +211,13 @@ export default function Login() {
               )}
 
               <div>
-                <label className="text-xs text-slate-500 mb-1 block font-medium">Email</label>
+                <label className="text-xs text-slate-500 mb-1 block font-medium">Email *</label>
                 <input name="email" type="email" value={form.email} onChange={onChange}
                   className="input-field" placeholder="you@company.com" required />
               </div>
 
               <div>
-                <label className="text-xs text-slate-500 mb-1 block font-medium">Password</label>
+                <label className="text-xs text-slate-500 mb-1 block font-medium">Password *</label>
                 <div className="relative">
                   <input name="password" type={showPassword ? 'text' : 'password'}
                     value={form.password} onChange={onChange}
@@ -231,7 +231,7 @@ export default function Login() {
 
               {isRegister && (
                 <div>
-                  <label className="text-xs text-slate-500 mb-1 block font-medium">Confirm Password</label>
+                  <label className="text-xs text-slate-500 mb-1 block font-medium">Confirm Password *</label>
                   <input name="password_confirm" type="password"
                     value={form.password_confirm} onChange={onChange}
                     className="input-field" placeholder="••••••••" required />

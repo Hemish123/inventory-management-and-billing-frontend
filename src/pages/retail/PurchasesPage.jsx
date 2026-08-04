@@ -172,7 +172,7 @@ export default function PurchasesPage() {
                 <input type="text" placeholder="Optional" value={form.invoice_number} onChange={e => setForm({...form, invoice_number: e.target.value})} className="input-field mt-1" />
               </div>
               <div className="col-span-2 md:col-span-1">
-                <label className="text-xs font-medium text-slate-500">Purchase Date</label>
+                <label className="text-xs font-medium text-slate-500">Purchase Date *</label>
                 <input required type="date" value={form.purchase_date} onChange={e => setForm({...form, purchase_date: e.target.value})} className="input-field mt-1" />
               </div>
             </div>
