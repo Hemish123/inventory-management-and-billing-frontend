@@ -122,13 +122,19 @@ export default function POSPage() {
   }, []);
 
   const handleBarcodeScan = async (e) => {
-    if (e.key !== 'Enter' || !barcodeInput.trim()) return;
-    const code = barcodeInput.trim();
-    setBarcodeInput(''); // clear immediately for next scan
+    if (e.key !== 'Enter') return;
+    
+    // Read directly from the DOM event to avoid React state closure timing issues with fast barcode scanners
+    const code = e.target.value.trim();
+    if (!code) return;
+    
+    // Clear the React state and the DOM value immediately
+    setBarcodeInput('');
+    e.target.value = '';
+    
     const { data, error } = await barcodeLookup(code);
     if (data?.data) {
       addToCart(data.data);
-      // Small beep could be added here
     } else {
       toast.error(error || 'Product not found');
     }
