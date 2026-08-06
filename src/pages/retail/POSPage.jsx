@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import Navbar from '../../components/common/Navbar';
 import Modal from '../../components/common/Modal';
 import { barcodeLookup, getProductDropdown } from '../../api/productsAPI';
-import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill, getReceiptPDFBlob } from '../../api/billingAPI';
+import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill } from '../../api/billingAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import toast from 'react-hot-toast';
@@ -367,21 +367,11 @@ export default function POSPage() {
       toast.success(`Bill ${res.data.data.bill_number} completed!`);
       setLastBill(res.data.data);
       
-      // Fetch receipt PDF as Blob to hide backend URL and use frontend blob URL
-      try {
-        const response = await getReceiptPDFBlob(res.data.data.id);
-        const file = new Blob([response.data], { type: 'application/pdf' });
-        const fileURL = URL.createObjectURL(file);
-        const printWindow = window.open(fileURL, '_blank');
-        if (printWindow) {
-          printWindow.onload = () => {
-            printWindow.print();
-            // Free memory after a short delay
-            setTimeout(() => URL.revokeObjectURL(fileURL), 10000);
-          };
-        }
-      } catch (err) {
-        toast.error('Failed to load receipt PDF');
+      // Open receipt PDF in new tab
+      const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
+      const printWindow = window.open(printUrl, '_blank');
+      if(printWindow) {
+        printWindow.onload = () => printWindow.print();
       }
 
       // Reset form AFTER window.open, then aggressively recapture focus
