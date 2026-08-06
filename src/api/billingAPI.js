@@ -25,3 +25,6 @@ export const finalizeBill = (id, data = {}) =>
 
 export const discardDraft = (id) =>
   apiCall(() => api.delete(`/billing/${id}/discard/`));
+
+export const getReceiptPDFBlob = (id) =>
+  api.get(`/billing/${id}/pdf/`, { responseType: 'blob' });
