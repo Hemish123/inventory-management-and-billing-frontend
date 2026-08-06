@@ -27,6 +27,8 @@ export default function ProductsPage() {
   // Selection and Printing State
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [barcodeModal, setBarcodeModal] = useState({ isOpen: false, product: null });
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printCounts, setPrintCounts] = useState({});
   const [printing, setPrinting] = useState(false);
 
   const [form, setForm] = useState({
@@ -86,13 +88,21 @@ export default function ProductsPage() {
   };
 
   const handlePrintBarcodes = () => {
-    // Check if any selected product has a barcode
     const validProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
     if (validProducts.length === 0) {
       toast.error('None of the selected products have a barcode assigned.');
       return;
     }
+    
+    const initialCounts = {};
+    validProducts.forEach(p => {
+      initialCounts[p.id] = 1;
+    });
+    setPrintCounts(initialCounts);
+    setShowPrintModal(true);
+  };
 
+  const generatePDF = () => {
     setPrinting(true);
     const element = document.getElementById('print-barcodes-container');
     const opt = {
@@ -103,9 +113,11 @@ export default function ProductsPage() {
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     
-    // Slight delay to ensure the hidden elements are rendered by React
     setTimeout(() => {
-      html2pdf().set(opt).from(element).save().then(() => setPrinting(false)).catch(() => {
+      html2pdf().set(opt).from(element).save().then(() => {
+        setPrinting(false);
+        setShowPrintModal(false);
+      }).catch(() => {
         toast.error('Failed to generate PDF');
         setPrinting(false);
       });
@@ -354,19 +366,75 @@ export default function ProductsPage() {
         </Modal>
       )}
 
-      {/* Hidden container for PDF printing (A4 formatted) */}
+      {/* Print Configuration Modal */}
+      {showPrintModal && (
+        <Modal title="Configure Barcode Quantities" onClose={() => !printing && setShowPrintModal(false)}>
+          <div className="p-4 space-y-4">
+            <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-2">
+              {products.filter(p => selectedProducts.includes(p.id) && p.barcode).map(product => (
+                <div key={product.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-xl bg-slate-50">
+                  <div className="flex-1 min-w-0 pr-4">
+                    <p className="font-semibold text-slate-800 text-sm truncate">{product.name}</p>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">{product.barcode}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-slate-500">Qty:</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="1000"
+                      value={printCounts[product.id] || 1} 
+                      onChange={(e) => setPrintCounts({ ...printCounts, [product.id]: parseInt(e.target.value) || 1 })}
+                      className="input-field w-20 text-center font-semibold"
+                      disabled={printing}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button 
+                type="button" 
+                onClick={() => setShowPrintModal(false)} 
+                className="btn-secondary px-4 py-2"
+                disabled={printing}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={generatePDF} 
+                disabled={printing}
+                className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+              >
+                <Printer className="w-4 h-4" />
+                {printing ? 'Generating PDF...' : 'Generate PDF'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Hidden container for PDF printing (A4 formatted) */}
       <div className="absolute top-0 left-[-9999px] opacity-0 pointer-events-none">
         <div id="print-barcodes-container" className="bg-white" style={{ width: '210mm' }}>
           {(() => {
             const printProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
-            const totalPages = Math.ceil(printProducts.length / 21) || 1;
+            const duplicatedProducts = [];
+            printProducts.forEach(p => {
+              const count = printCounts[p.id] || 1;
+              for (let i = 0; i < count; i++) {
+                duplicatedProducts.push({ ...p, _printId: `${p.id}-${i}` });
+              }
+            });
+            
+            const totalPages = Math.ceil(duplicatedProducts.length / 21) || 1;
             return Array.from({ length: totalPages }).map((_, pageIndex) => (
               <div key={pageIndex}>
                 <div className="p-6" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
                   <div className="grid grid-cols-3 gap-4">
-                    {printProducts.slice(pageIndex * 21, (pageIndex + 1) * 21).map(p => (
-                      <div key={p.id} className="flex flex-col items-center justify-center p-3 border border-slate-300 rounded-lg">
+                    {duplicatedProducts.slice(pageIndex * 21, (pageIndex + 1) * 21).map(p => (
+                      <div key={p._printId} className="flex flex-col items-center justify-center p-3 border border-slate-300 rounded-lg">
                         <Barcode value={p.barcode} width={1.2} height={40} fontSize={10} margin={0} />
                         <span className="text-[10px] font-bold mt-2 text-center truncate w-full" title={p.name}>{p.name}</span>
                         <span className="text-[10px] text-slate-600 font-semibold">{formatCurrency(p.selling_price)}</span>
