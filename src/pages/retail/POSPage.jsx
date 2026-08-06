@@ -220,6 +220,12 @@ export default function POSPage() {
     
     setSubmitting(true);
     const payload = buildPayload(true);
+    
+    // Discard old draft to replace it if it exists
+    if (activeDraftId) {
+      await discardDraft(activeDraftId);
+    }
+    
     const { data, error } = await createBill(payload);
     setSubmitting(false);
     
@@ -230,6 +236,20 @@ export default function POSPage() {
   };
 
   const handleResumeDraft = async (draftId) => {
+    // Auto-save current bill as draft if cart is not empty and it's not the same draft
+    if (cart.length > 0 && activeDraftId !== draftId) {
+      try {
+        const payload = buildPayload(true);
+        if (activeDraftId) {
+          await discardDraft(activeDraftId);
+        }
+        await createBill(payload);
+        toast.success('Current bill auto-saved as draft');
+      } catch (err) {
+        console.error('Auto-save draft failed', err);
+      }
+    }
+
     const { data } = await resumeDraft(draftId);
     if (data?.data) {
       const bill = data.data;
@@ -249,6 +269,11 @@ export default function POSPage() {
       setActiveDraftId(bill.id);
       setShowDrafts(false);
       toast.success(`Resumed bill ${bill.bill_number}`);
+      
+      // Focus barcode input so subsequent scans add directly to cart
+      setTimeout(() => {
+        barcodeRef.current?.focus();
+      }, 100);
     }
   };
 
@@ -271,7 +296,9 @@ export default function POSPage() {
 
     let res;
     if (activeDraftId) {
-      res = await finalizeBill(activeDraftId, payload);
+      // Discard the old draft because finalizeBill doesn't update new line items added during Resume
+      await discardDraft(activeDraftId);
+      res = await createBill(payload);
     } else {
       res = await createBill(payload);
     }
