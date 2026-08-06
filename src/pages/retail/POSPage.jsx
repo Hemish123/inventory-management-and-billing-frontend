@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Navbar from '../../components/common/Navbar';
 import Modal from '../../components/common/Modal';
 import { barcodeLookup, getProductDropdown } from '../../api/productsAPI';
@@ -43,6 +43,8 @@ export default function POSPage() {
   
   const barcodeRef = useRef(null);
   const searchRef = useRef(null);
+  const scanLockRef = useRef(false);
+  const addToCartRef = useRef(null);
 
   useEffect(() => {
     loadBranches();
@@ -83,31 +85,18 @@ export default function POSPage() {
     }
   }, []); // Run once on mount
 
-  // Keyboard Shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Don't trigger if typing in textareas or inputs other than specific ones
-      if (e.key === 'F1') { e.preventDefault(); barcodeRef.current?.focus(); }
-      if (e.key === 'F2') { e.preventDefault(); setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }
-      if (e.key === 'F4') { e.preventDefault(); if(cart.length > 0) handleHoldBill(); }
-      if (e.key === 'F7') { e.preventDefault(); setPaymentMethod('CASH'); }
-      if (e.key === 'F8') { e.preventDefault(); setPaymentMethod('UPI'); }
-      if (e.key === 'F9') { e.preventDefault(); if(cart.length > 0 && !submitting) handleSubmit(); }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, submitting]);
-
-  const addToCart = useCallback((product) => {
+  // ── addToCart: plain function, stored in ref for stable access ──
+  const addToCart = (product) => {
     setCart(prev => {
-      const existing = prev.find(c => c.product === product.id);
+      const productId = typeof product.id === 'string' ? parseInt(product.id, 10) : product.id;
+      const existing = prev.find(c => c.product === productId);
       if (existing) {
         return prev.map(c =>
-          c.product === product.id ? { ...c, quantity: c.quantity + 1 } : c
+          c.product === productId ? { ...c, quantity: c.quantity + 1 } : c
         );
       }
       return [...prev, {
-        product: product.id,
+        product: productId,
         product_name: product.name,
         barcode: product.barcode || '',
         hsn_code: product.hsn_code || '',
@@ -119,26 +108,61 @@ export default function POSPage() {
         discount_amount: 0,
       }];
     });
-  }, []);
+  };
 
+  // Always keep the ref pointing to the latest addToCart
+  addToCartRef.current = addToCart;
+
+  // ── Barcode scan handler: uses refs to avoid stale closures ──
   const handleBarcodeScan = async (e) => {
     if (e.key !== 'Enter') return;
-    
-    // Read directly from the DOM event to avoid React state closure timing issues with fast barcode scanners
-    const code = e.target.value.trim();
+
+    const code = (e.target.value || '').trim();
     if (!code) return;
-    
-    // Clear the React state and the DOM value immediately
+
+    // Prevent double-processing from fast scanners
+    if (scanLockRef.current) return;
+    scanLockRef.current = true;
+
+    // Clear input immediately
     setBarcodeInput('');
     e.target.value = '';
-    
-    const { data, error } = await barcodeLookup(code);
-    if (data?.data) {
-      addToCart(data.data);
-    } else {
-      toast.error(error || 'Product not found');
+
+    try {
+      const { data, error } = await barcodeLookup(code);
+      if (data?.data) {
+        // Always use the ref to get the latest addToCart
+        addToCartRef.current(data.data);
+      } else {
+        toast.error(error || 'Product not found');
+      }
+    } catch (err) {
+      toast.error('Scanner error. Try again.');
+    } finally {
+      scanLockRef.current = false;
+      // Re-focus barcode input after every scan
+      requestAnimationFrame(() => barcodeRef.current?.focus());
     }
   };
+
+  // ── Keyboard Shortcuts: use refs for handlers to avoid stale closures ──
+  const holdBillRef = useRef(null);
+  const submitBillRef = useRef(null);
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F1') { e.preventDefault(); barcodeRef.current?.focus(); }
+      if (e.key === 'F2') { e.preventDefault(); setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }
+      if (e.key === 'F4') { e.preventDefault(); if (cartRef.current.length > 0 && holdBillRef.current) holdBillRef.current(); }
+      if (e.key === 'F7') { e.preventDefault(); setPaymentMethod('CASH'); }
+      if (e.key === 'F8') { e.preventDefault(); setPaymentMethod('UPI'); }
+      if (e.key === 'F9') { e.preventDefault(); if (cartRef.current.length > 0 && submitBillRef.current) submitBillRef.current(); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []); // Empty deps — refs always point to latest
 
   const updateQty = (idx, delta) => {
     setCart(prev => prev.map((c, i) => {
@@ -166,7 +190,10 @@ export default function POSPage() {
     setDiscountValue(0);
     setNotes('');
     setActiveDraftId(null);
+    // Aggressive refocus: try immediately + delayed to beat HeadlessUI focus trap
     barcodeRef.current?.focus();
+    setTimeout(() => barcodeRef.current?.focus(), 50);
+    setTimeout(() => barcodeRef.current?.focus(), 200);
   };
 
   // Calculations
@@ -240,9 +267,10 @@ export default function POSPage() {
       resetForm();
     } else toast.error(error || 'Failed to save draft');
   };
+  holdBillRef.current = handleHoldBill;
 
   const handleResumeDraft = async (draftId) => {
-    // Auto-save current bill as draft if cart is not empty and it's not the same draft
+    // Auto-save current bill as draft if cart has items and it's a different bill
     if (cart.length > 0 && activeDraftId !== draftId) {
       try {
         const payload = buildPayload(true);
@@ -261,7 +289,7 @@ export default function POSPage() {
       const bill = data.data;
       setCart(bill.items.map(i => ({
         ...i,
-        product: i.product,
+        product: typeof i.product === 'string' ? parseInt(i.product, 10) : i.product,
         unit_price: parseFloat(i.unit_price),
         discount_type: i.discount_type || 'NONE',
         discount_percentage: parseFloat(i.discount_percentage || 0),
@@ -276,10 +304,11 @@ export default function POSPage() {
       setShowDrafts(false);
       toast.success(`Resumed bill ${bill.bill_number}`);
       
-      // Focus barcode input so subsequent scans add directly to cart
-      setTimeout(() => {
-        barcodeRef.current?.focus();
-      }, 100);
+      // Aggressive refocus: HeadlessUI Dialog steals focus on close,
+      // so we must re-focus after the Dialog transition animation completes
+      barcodeRef.current?.focus();
+      setTimeout(() => barcodeRef.current?.focus(), 100);
+      setTimeout(() => barcodeRef.current?.focus(), 350);
     }
   };
 
@@ -302,7 +331,6 @@ export default function POSPage() {
 
     let res;
     if (activeDraftId) {
-      // Discard the old draft because finalizeBill doesn't update new line items added during Resume
       await discardDraft(activeDraftId);
       res = await createBill(payload);
     } else {
@@ -316,7 +344,6 @@ export default function POSPage() {
       setLastBill(res.data.data);
       resetForm();
       
-      // Auto-print thermal receipt
       const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
       const printWindow = window.open(printUrl, '_blank');
       if(printWindow) {
@@ -326,6 +353,7 @@ export default function POSPage() {
       toast.error(res.error || 'Failed to complete sale');
     }
   };
+  submitBillRef.current = handleSubmit;
 
   const filteredProducts = productList.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
