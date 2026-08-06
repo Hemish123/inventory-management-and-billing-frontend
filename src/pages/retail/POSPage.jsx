@@ -43,7 +43,6 @@ export default function POSPage() {
   
   const barcodeRef = useRef(null);
   const searchRef = useRef(null);
-  const scanLockRef = useRef(false);
   const addToCartRef = useRef(null);
 
   useEffect(() => {
@@ -51,6 +50,17 @@ export default function POSPage() {
     loadProducts();
     barcodeRef.current?.focus();
   }, []);
+
+  // Auto-focus barcode input whenever modals close
+  useEffect(() => {
+    if (!showDrafts && !showShortcuts && !showSearch) {
+      // Multiple attempts to beat HeadlessUI Dialog focus restoration
+      const t1 = setTimeout(() => barcodeRef.current?.focus(), 50);
+      const t2 = setTimeout(() => barcodeRef.current?.focus(), 200);
+      const t3 = setTimeout(() => barcodeRef.current?.focus(), 400);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    }
+  }, [showDrafts, showShortcuts, showSearch]);
 
   const loadBranches = async () => {
     const { data } = await getBranchDropdown();
@@ -113,36 +123,29 @@ export default function POSPage() {
   // Always keep the ref pointing to the latest addToCart
   addToCartRef.current = addToCart;
 
-  // ── Barcode scan handler: uses refs to avoid stale closures ──
-  const handleBarcodeScan = async (e) => {
+  // ── Barcode scan handler: fire-and-forget to never block rapid scans ──
+  const handleBarcodeScan = (e) => {
     if (e.key !== 'Enter') return;
 
     const code = (e.target.value || '').trim();
     if (!code) return;
 
-    // Prevent double-processing from fast scanners
-    if (scanLockRef.current) return;
-    scanLockRef.current = true;
-
-    // Clear input immediately
+    // Clear input immediately for next scan
     setBarcodeInput('');
     e.target.value = '';
 
-    try {
-      const { data, error } = await barcodeLookup(code);
+    // Fire the lookup without blocking — each scan is independent
+    barcodeLookup(code).then(({ data, error }) => {
       if (data?.data) {
-        // Always use the ref to get the latest addToCart
         addToCartRef.current(data.data);
       } else {
         toast.error(error || 'Product not found');
       }
-    } catch (err) {
+    }).catch(() => {
       toast.error('Scanner error. Try again.');
-    } finally {
-      scanLockRef.current = false;
-      // Re-focus barcode input after every scan
-      requestAnimationFrame(() => barcodeRef.current?.focus());
-    }
+    }).finally(() => {
+      barcodeRef.current?.focus();
+    });
   };
 
   // ── Keyboard Shortcuts: use refs for handlers to avoid stale closures ──
