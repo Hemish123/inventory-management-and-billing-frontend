@@ -109,7 +109,20 @@ export const apiCall = async (fn) => {
         for (const [key, val] of Object.entries(data.errors)) {
           const niceKey = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
           if (Array.isArray(val)) {
-            errors.push(`${niceKey}: ${val[0]}`);
+            // Handle nested serializer errors like items: [{product: ['...']}]
+            const first = val[0];
+            if (typeof first === 'string') {
+              errors.push(`${niceKey}: ${first}`);
+            } else if (typeof first === 'object' && first !== null) {
+              // Nested object error — extract first readable message
+              const nested = Object.entries(first);
+              if (nested.length > 0) {
+                const [nestedKey, nestedVal] = nested[0];
+                const nestedNice = nestedKey.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                const msg = Array.isArray(nestedVal) ? nestedVal[0] : String(nestedVal);
+                errors.push(`${niceKey} → ${nestedNice}: ${msg}`);
+              }
+            }
           } else if (typeof val === 'string') {
             errors.push(`${niceKey}: ${val}`);
           }

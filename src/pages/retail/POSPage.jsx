@@ -291,9 +291,13 @@ export default function POSPage() {
     if (data?.data) {
       const bill = data.data;
       setCart(bill.items.map(i => ({
-        ...i,
         product: typeof i.product === 'string' ? parseInt(i.product, 10) : i.product,
-        unit_price: parseFloat(i.unit_price),
+        product_name: i.product_name || '',
+        barcode: i.barcode || '',
+        hsn_code: i.hsn_code || '',
+        unit_price: parseFloat(i.unit_price) || 0,
+        tax_percentage: parseFloat(i.tax_percentage) || 0,
+        quantity: parseFloat(i.quantity) || 1,
         discount_type: i.discount_type || 'NONE',
         discount_percentage: parseFloat(i.discount_percentage || 0),
         discount_amount: parseFloat(i.discount_amount || 0),
