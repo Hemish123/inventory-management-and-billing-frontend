@@ -70,22 +70,22 @@ export default function Login() {
               <CreditCard className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="font-sora text-3xl font-bold text-slate-800">MSME PayTrack</h1>
-              <p className="text-brand-500 text-sm font-medium">Smart Payment Dashboard</p>
+              <h1 className="font-sora text-3xl font-bold text-slate-800">RetailTrack</h1>
+              <p className="text-brand-500 text-sm font-medium">Retail & Inventory POS</p>
             </div>
           </div>
 
           <p className="text-lg text-slate-600 leading-relaxed">
-            Make confident credit decisions. Analyze payment history, identify reliable customers, 
-            and assign smart credit timelines — all in one place.
+            Manage your retail store efficiently. Track inventory, process lightning-fast POS billing, 
+            and monitor daily sales analytics — all in one place.
           </p>
 
           {/* Feature cards */}
           <div className="space-y-3">
             {[
-              { icon: BarChart3, text: 'AI-powered payment analysis with 10-year history support', color: 'from-brand-500 to-brand-600' },
-              { icon: Shield, text: 'Smart credit scoring system with 5 automated tiers', color: 'from-emerald-500 to-teal-500' },
-              { icon: TrendingUp, text: 'Real-time dashboards with interactive charts & heatmaps', color: 'from-amber-500 to-orange-500' },
+              { icon: BarChart3, text: 'Lightning-fast POS with barcode scanner integration', color: 'from-brand-500 to-brand-600' },
+              { icon: Shield, text: 'Real-time inventory tracking and low stock alerts', color: 'from-emerald-500 to-teal-500' },
+              { icon: TrendingUp, text: 'Comprehensive daily sales and financial reports', color: 'from-amber-500 to-orange-500' },
             ].map((f, i) => (
               <div key={i} className="flex items-center gap-4 bg-white/60 backdrop-blur-sm rounded-xl px-5 py-4 
                                       border border-white/80 shadow-sm animate-slide-up" style={{ animationDelay: `${i * 150}ms` }}>
@@ -114,8 +114,8 @@ export default function Login() {
                            flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/25">
               <CreditCard className="w-7 h-7 text-white" />
             </div>
-            <h1 className="font-sora text-2xl font-bold text-slate-800">MSME PayTrack</h1>
-            <p className="text-brand-500 text-sm mt-1">Smart Payment Dashboard</p>
+            <h1 className="font-sora text-2xl font-bold text-slate-800">RetailTrack</h1>
+            <p className="text-brand-500 text-sm mt-1">Retail & Inventory POS</p>
           </div>
 
           {/* Form Card */}
@@ -124,7 +124,7 @@ export default function Login() {
               {isRegister ? 'Create Account' : 'Welcome Back'}
             </h2>
             <p className="text-slate-400 text-sm mb-6">
-              {isRegister ? 'Start managing your MSME payments' : 'Sign in to your dashboard'}
+              {isRegister ? 'Start managing your retail store' : 'Sign in to your dashboard'}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,7 +149,7 @@ export default function Login() {
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block font-medium">Company Name *</label>
                       <input name="company_name" value={form.company_name} onChange={onChange}
-                        className="input-field" placeholder="Your MSME Name" />
+                        className="input-field" placeholder="Your Store Name" />
                     </div>
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block font-medium">Company GST</label>
@@ -256,7 +256,7 @@ export default function Login() {
               <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-brand-50 to-purple-50 border border-brand-100">
                 <p className="text-xs text-slate-600">
                   <span className="text-brand-600 font-semibold">Demo:</span>{' '}
-                  demo@msmepaytrack.com / demo1234
+                  demo@retailtrack.com / demo1234
                 </p>
               </div>
             )}
