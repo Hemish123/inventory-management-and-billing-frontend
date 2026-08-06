@@ -106,7 +106,7 @@ export default function ProductsPage() {
     setPrinting(true);
     const element = document.getElementById('print-barcodes-container');
     const opt = {
-      margin: 10,
+      margin: 0,
       filename: `barcodes_${new Date().getTime()}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
@@ -431,8 +431,8 @@ export default function ProductsPage() {
             const totalPages = Math.ceil(duplicatedProducts.length / 21) || 1;
             return Array.from({ length: totalPages }).map((_, pageIndex) => (
               <div key={pageIndex}>
-                <div className="p-6" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
-                  <div className="grid grid-cols-3 gap-4">
+                <div className="p-8" style={{ boxSizing: 'border-box' }}>
+                  <div className="grid grid-cols-3 gap-6">
                     {duplicatedProducts.slice(pageIndex * 21, (pageIndex + 1) * 21).map(p => (
                       <div key={p._printId} className="flex flex-col items-center justify-center p-3 border border-slate-300 rounded-lg">
                         <Barcode value={p.barcode} width={1.2} height={40} fontSize={10} margin={0} />
