@@ -357,23 +357,27 @@ export default function ProductsPage() {
       {/* Hidden container for PDF printing (A4 formatted) */}
       {/* Hidden container for PDF printing (A4 formatted) */}
       <div className="absolute top-0 left-[-9999px] opacity-0 pointer-events-none">
-        <div id="print-barcodes-container" className="bg-white">
-          {Array.from({ length: Math.ceil(products.filter(p => selectedProducts.includes(p.id) && p.barcode).length / 21) }).map((_, pageIndex) => {
-            const pageProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode).slice(pageIndex * 21, (pageIndex + 1) * 21);
-            return (
-              <div key={pageIndex} className="p-6" style={{ width: '210mm', height: '297mm', pageBreakAfter: 'always', boxSizing: 'border-box' }}>
-                <div className="grid grid-cols-3 gap-6">
-                  {pageProducts.map(p => (
-                    <div key={p.id} className="flex flex-col items-center justify-center p-4 border border-slate-300 rounded-xl bg-white" style={{ height: '33mm' }}>
-                      <Barcode value={p.barcode} width={1.5} height={50} fontSize={12} margin={0} />
-                      <span className="text-[11px] font-bold mt-2 text-center truncate w-full text-indigo-900" title={p.name}>{p.name}</span>
-                      <span className="text-[11px] text-slate-600 font-semibold mt-0.5">{formatCurrency(p.selling_price)}</span>
-                    </div>
-                  ))}
+        <div id="print-barcodes-container" className="bg-white" style={{ width: '210mm' }}>
+          {(() => {
+            const printProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
+            const totalPages = Math.ceil(printProducts.length / 21) || 1;
+            return Array.from({ length: totalPages }).map((_, pageIndex) => (
+              <div key={pageIndex}>
+                <div className="p-6" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
+                  <div className="grid grid-cols-3 gap-4">
+                    {printProducts.slice(pageIndex * 21, (pageIndex + 1) * 21).map(p => (
+                      <div key={p.id} className="flex flex-col items-center justify-center p-3 border border-slate-300 rounded-lg">
+                        <Barcode value={p.barcode} width={1.2} height={40} fontSize={10} margin={0} />
+                        <span className="text-[10px] font-bold mt-2 text-center truncate w-full" title={p.name}>{p.name}</span>
+                        <span className="text-[10px] text-slate-600 font-semibold">{formatCurrency(p.selling_price)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+                {pageIndex < totalPages - 1 && <div className="html2pdf__page-break"></div>}
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
       </div>
     </div>
