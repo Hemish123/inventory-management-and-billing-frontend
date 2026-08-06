@@ -54,13 +54,22 @@ export default function POSPage() {
   // Auto-focus barcode input whenever modals close
   useEffect(() => {
     if (!showDrafts && !showShortcuts && !showSearch) {
-      // Multiple attempts to beat HeadlessUI Dialog focus restoration
       const t1 = setTimeout(() => barcodeRef.current?.focus(), 50);
       const t2 = setTimeout(() => barcodeRef.current?.focus(), 200);
       const t3 = setTimeout(() => barcodeRef.current?.focus(), 400);
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
   }, [showDrafts, showShortcuts, showSearch]);
+
+  // Auto-focus barcode input when user switches back to this tab (e.g., after receipt PDF)
+  useEffect(() => {
+    const onWindowFocus = () => {
+      // Small delay to let browser settle focus
+      setTimeout(() => barcodeRef.current?.focus(), 100);
+    };
+    window.addEventListener('focus', onWindowFocus);
+    return () => window.removeEventListener('focus', onWindowFocus);
+  }, []);
 
   const loadBranches = async () => {
     const { data } = await getBranchDropdown();
@@ -94,6 +103,14 @@ export default function POSPage() {
       window.history.replaceState({}, '', '/pos');
     }
   }, []); // Run once on mount
+
+  // Auto-hide the "Sale Completed" message after 5 seconds
+  useEffect(() => {
+    if (lastBill) {
+      const timer = setTimeout(() => setLastBill(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastBill]);
 
   // ── addToCart: plain function, stored in ref for stable access ──
   const addToCart = (product) => {
@@ -349,13 +366,20 @@ export default function POSPage() {
     if (res.data?.data) {
       toast.success(`Bill ${res.data.data.bill_number} completed!`);
       setLastBill(res.data.data);
-      resetForm();
       
+      // Open receipt PDF in new tab
       const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
       const printWindow = window.open(printUrl, '_blank');
       if(printWindow) {
         printWindow.onload = () => printWindow.print();
       }
+
+      // Reset form AFTER window.open, then aggressively recapture focus
+      resetForm();
+      // Re-focus after the new tab steals focus
+      setTimeout(() => barcodeRef.current?.focus(), 500);
+      setTimeout(() => barcodeRef.current?.focus(), 1000);
+      setTimeout(() => barcodeRef.current?.focus(), 2000);
     } else {
       toast.error(res.error || 'Failed to complete sale');
     }
