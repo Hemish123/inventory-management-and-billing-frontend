@@ -3,14 +3,15 @@ import Navbar from '../../components/common/Navbar';
 import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
-import { getSuppliers, createSupplier } from '../../api/productsAPI';
-import { Plus, Building2, Trash2, Phone, Mail } from 'lucide-react';
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../api/productsAPI';
+import { Plus, Building2, Trash2, Phone, Mail, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
     name: '', contact_person: '', phone: '', email: '', address: '', gstin: ''
   });
@@ -26,13 +27,37 @@ export default function SuppliersPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { data, error } = await createSupplier(form);
+    const { data, error } = editingId 
+      ? await updateSupplier(editingId, form)
+      : await createSupplier(form);
+      
     if (data) {
-      toast.success('Supplier created');
+      toast.success(editingId ? 'Supplier updated' : 'Supplier created');
       setShowModal(false);
+      setEditingId(null);
       setForm({ name: '', contact_person: '', phone: '', email: '', address: '', gstin: '' });
       loadSuppliers();
     } else toast.error(error || 'Failed');
+  };
+
+  const handleEdit = (supplier) => {
+    setEditingId(supplier.id);
+    setForm({
+      name: supplier.name || '',
+      contact_person: supplier.contact_person || '',
+      phone: supplier.phone || '',
+      email: supplier.email || '',
+      address: supplier.address || '',
+      gstin: supplier.gstin || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (e, id, name) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete supplier "${name}"?`)) return;
+    const { error } = await deleteSupplier(id);
+    if (error) toast.error(error); else { toast.success('Deleted'); loadSuppliers(); }
   };
 
   const columns = [
@@ -54,6 +79,18 @@ export default function SuppliersPage() {
       <span className="flex items-center gap-1 text-sm text-slate-600"><Mail className="w-3 h-3" />{v}</span>
     ) : <span className="text-slate-300">—</span> },
     { key: 'gstin', label: 'GSTIN', render: v => v || <span className="text-slate-300">—</span> },
+    { key: 'actions', label: '', render: (_, row) => (
+      <div className="flex gap-1 justify-end" onClick={e => e.stopPropagation()}>
+        <button onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
+          className="p-1.5 text-violet-500 hover:text-violet-700 hover:bg-violet-50 rounded-full transition-colors">
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button onClick={(e) => handleDelete(e, row.id, row.name)}
+          className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    )},
   ];
 
   return (
@@ -75,7 +112,7 @@ export default function SuppliersPage() {
       </div>
 
       {showModal && (
-        <Modal title="Add Supplier" onClose={() => setShowModal(false)}>
+        <Modal title={editingId ? "Edit Supplier" : "Add Supplier"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', contact_person: '', phone: '', email: '', address: '', gstin: '' }); }}>
           <form onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -108,8 +145,10 @@ export default function SuppliersPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="btn-secondary px-4 py-2">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-700 transition-colors">Create Supplier</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', contact_person: '', phone: '', email: '', address: '', gstin: '' }); }} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-700 transition-colors">
+                {editingId ? "Save Changes" : "Create Supplier"}
+              </button>
             </div>
           </form>
         </Modal>

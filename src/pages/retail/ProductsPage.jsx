@@ -5,8 +5,8 @@ import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
-import { getProducts, createProduct, deleteProduct, getCategories, createCategory, getBrands, createBrand, getProductStock } from '../../api/productsAPI';
-import { getSuppliers } from '../../api/productsAPI';
+import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, createCategory, getBrands, createBrand, getProductStock } from '../../api/productsAPI';
+import { getSuppliers, createSupplier } from '../../api/productsAPI';
 import { formatCurrency } from '../../utils/formatters';
 import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -33,7 +34,7 @@ export default function ProductsPage() {
   const [printing, setPrinting] = useState(false);
 
   const [form, setForm] = useState({
-    name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier: '',
+    name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
     unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18,
     minimum_stock_level: 10, reorder_level: 20,
   });
@@ -60,18 +61,64 @@ export default function ProductsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = { ...form };
+
+    // Handle Supplier Auto-Creation
+    if (payload.supplier_name && payload.supplier_name.trim() !== '') {
+      const existing = suppliers.find(s => s.name.toLowerCase() === payload.supplier_name.trim().toLowerCase());
+      if (existing) {
+        payload.supplier = existing.id;
+      } else {
+        try {
+          const { data: newSupplier } = await createSupplier({ name: payload.supplier_name.trim() });
+          if (newSupplier) {
+            payload.supplier = newSupplier.id;
+            setSuppliers(prev => [...prev, newSupplier]);
+          }
+        } catch (err) {
+          console.error("Failed to create supplier", err);
+        }
+      }
+    }
+
     if (!payload.category) delete payload.category;
     if (!payload.brand) delete payload.brand;
     if (!payload.supplier) delete payload.supplier;
     if (!payload.barcode) delete payload.barcode;
-    const { data, error } = await createProduct(payload);
+    delete payload.supplier_name;
+
+    const { data, error } = editingId 
+      ? await updateProduct(editingId, payload)
+      : await createProduct(payload);
+
     if (data) {
-      toast.success('Product created');
+      toast.success(editingId ? 'Product updated' : 'Product created');
       setShowModal(false);
-      setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier: '',
+      setEditingId(null);
+      setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
         unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 });
       loadProducts();
     } else toast.error(error || 'Failed');
+  };
+
+  const handleEdit = (product) => {
+    setEditingId(product.id);
+    setForm({
+      name: product.name || '',
+      sku: product.sku || '',
+      barcode: product.barcode || '',
+      description: product.description || '',
+      category: product.category_name || '',
+      brand: product.brand_name || '',
+      supplier_name: product.supplier_name || '',
+      unit: product.unit || 'Nos',
+      cost_price: product.cost_price || '',
+      selling_price: product.selling_price || '',
+      hsn_code: product.hsn_code || '',
+      tax_percentage: product.tax_percentage || 18,
+      minimum_stock_level: product.minimum_stock_level || 10,
+      reorder_level: product.reorder_level || 20
+    });
+    setShowModal(true);
   };
 
   const handleDelete = async (e, id, name) => {
@@ -165,10 +212,16 @@ export default function ProductsPage() {
     { key: 'actions', label: '', render: (_, row) => (
       <div className="flex gap-1" onClick={e => e.stopPropagation()}>
         {!isEmployee && (
-          <button onClick={(e) => handleDelete(e, row.id, row.name)}
-            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <>
+            <button onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
+              className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button onClick={(e) => handleDelete(e, row.id, row.name)}
+              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
         )}
       </div>
     )},
@@ -213,9 +266,9 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Add Product Modal */}
+      {/* Add/Edit Product Modal */}
       {showModal && (
-        <Modal title="Add Product" onClose={() => setShowModal(false)}>
+        <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 }); }}>
           <form onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -247,11 +300,11 @@ export default function ProductsPage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500">Supplier</label>
-                <select value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })}
-                  className="input-field mt-1">
-                  <option value="">None</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <input list="supplier-options" value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })}
+                  placeholder="Type or select..." className="input-field mt-1" />
+                <datalist id="supplier-options">
+                  {suppliers.map(s => <option key={s.id} value={s.name} />)}
+                </datalist>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -303,9 +356,9 @@ export default function ProductsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 }); }} className="btn-secondary px-4 py-2">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors">
-                Create Product
+                {editingId ? "Save Changes" : "Create Product"}
               </button>
             </div>
           </form>

@@ -4,8 +4,8 @@ import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
-import { getBranches, createBranch, deleteBranch } from '../../api/coreAPI';
-import { Plus, Trash2, MapPin } from 'lucide-react';
+import { getBranches, createBranch, updateBranch, deleteBranch } from '../../api/coreAPI';
+import { Plus, Trash2, MapPin, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function BranchesPage() {
@@ -14,6 +14,7 @@ export default function BranchesPage() {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ name: '', code: '', address: '', phone: '', email: '', manager_name: '' });
 
   useEffect(() => { loadBranches(); }, []);
@@ -27,13 +28,30 @@ export default function BranchesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { data, error } = await createBranch(form);
+    const { data, error } = editingId 
+      ? await updateBranch(editingId, form)
+      : await createBranch(form);
+
     if (data) {
-      toast.success('Branch created');
+      toast.success(editingId ? 'Branch updated' : 'Branch created');
       setShowModal(false);
+      setEditingId(null);
       setForm({ name: '', code: '', address: '', phone: '', email: '', manager_name: '' });
       loadBranches();
     } else toast.error(error || 'Failed');
+  };
+
+  const handleEdit = (branch) => {
+    setEditingId(branch.id);
+    setForm({
+      name: branch.name || '',
+      code: branch.code || '',
+      address: branch.address || '',
+      phone: branch.phone || '',
+      email: branch.email || '',
+      manager_name: branch.manager_name || ''
+    });
+    setShowModal(true);
   };
 
   const handleDelete = async (e, id, name) => {
@@ -61,10 +79,16 @@ export default function BranchesPage() {
     { key: 'staff_count', label: 'Staff', render: v => <span className="font-semibold">{v || 0}</span> },
     { key: 'actions', label: '', render: (_, row) => (
       !isEmployee && (
-        <button onClick={(e) => handleDelete(e, row.id, row.name)}
-          className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors">
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="flex gap-1 justify-end">
+          <button onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
+            className="p-1.5 text-violet-500 hover:text-violet-700 hover:bg-violet-50 rounded-full transition-colors">
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button onClick={(e) => handleDelete(e, row.id, row.name)}
+            className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       )
     )},
   ];
@@ -87,7 +111,7 @@ export default function BranchesPage() {
       </div>
 
       {showModal && (
-        <Modal title="Add Branch" onClose={() => setShowModal(false)}>
+        <Modal title={editingId ? "Edit Branch" : "Add Branch"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', code: '', address: '', phone: '', email: '', manager_name: '' }); }}>
           <form onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -118,8 +142,10 @@ export default function BranchesPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="btn-secondary px-4 py-2">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded-xl font-semibold">Create Branch</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', code: '', address: '', phone: '', email: '', manager_name: '' }); }} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded-xl font-semibold">
+                {editingId ? "Save Changes" : "Create Branch"}
+              </button>
             </div>
           </form>
         </Modal>
