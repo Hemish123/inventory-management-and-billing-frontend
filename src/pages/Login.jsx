@@ -256,7 +256,7 @@ export default function Login() {
               <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-brand-50 to-purple-50 border border-brand-100">
                 <p className="text-xs text-slate-600">
                   <span className="text-brand-600 font-semibold">Demo:</span>{' '}
-                  demo@retailtrack.com / demo1234
+                  demo@retailtrack.jmstech.co / demo1234
                 </p>
               </div>
             )}

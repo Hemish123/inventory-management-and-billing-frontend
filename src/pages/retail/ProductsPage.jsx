@@ -29,6 +29,7 @@ export default function ProductsPage() {
   const [barcodeModal, setBarcodeModal] = useState({ isOpen: false, product: null });
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printCounts, setPrintCounts] = useState({});
+  const [barcodeSize, setBarcodeSize] = useState('medium'); // 'small' | 'medium' | 'large'
   const [printing, setPrinting] = useState(false);
 
   const [form, setForm] = useState({
@@ -368,29 +369,61 @@ export default function ProductsPage() {
 
       {/* Print Configuration Modal */}
       {showPrintModal && (
-        <Modal title="Configure Barcode Quantities" onClose={() => !printing && setShowPrintModal(false)}>
-          <div className="p-4 space-y-4">
-            <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-2">
-              {products.filter(p => selectedProducts.includes(p.id) && p.barcode).map(product => (
-                <div key={product.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-xl bg-slate-50">
-                  <div className="flex-1 min-w-0 pr-4">
-                    <p className="font-semibold text-slate-800 text-sm truncate">{product.name}</p>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">{product.barcode}</p>
+        <Modal title="Configure Barcode Printing" onClose={() => !printing && setShowPrintModal(false)}>
+          <div className="p-4 space-y-5">
+            {/* Barcode Size Selector */}
+            <div>
+              <h4 className="text-sm font-bold text-slate-700 mb-3">Barcode Size</h4>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { key: 'small', label: 'Small', desc: '28 per page', example: 'Rakhi, Jewellery' },
+                  { key: 'medium', label: 'Medium', desc: '21 per page', example: 'Crackers, Boxes' },
+                  { key: 'large', label: 'Large', desc: '14 per page', example: 'Mango Boxes' },
+                ].map(s => (
+                  <button key={s.key} onClick={() => setBarcodeSize(s.key)} disabled={printing}
+                    className={`p-3 rounded-xl border-2 transition-all text-left ${
+                      barcodeSize === s.key
+                        ? 'border-indigo-600 bg-indigo-50 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'
+                    }`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-3 h-3 rounded-full ${
+                        s.key === 'small' ? 'bg-emerald-500' : s.key === 'medium' ? 'bg-amber-500' : 'bg-rose-500'
+                      }`} />
+                      <span className={`font-bold text-sm ${barcodeSize === s.key ? 'text-indigo-700' : 'text-slate-700'}`}>{s.label}</span>
+                    </div>
+                    <p className={`text-xs font-semibold ${barcodeSize === s.key ? 'text-indigo-600' : 'text-slate-500'}`}>{s.desc}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{s.example}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Product Quantities */}
+            <div>
+              <h4 className="text-sm font-bold text-slate-700 mb-2">Product Quantities</h4>
+              <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-2">
+                {products.filter(p => selectedProducts.includes(p.id) && p.barcode).map(product => (
+                  <div key={product.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-xl bg-slate-50">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <p className="font-semibold text-slate-800 text-sm truncate">{product.name}</p>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5">{product.barcode}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-slate-500">Qty:</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max="1000"
+                        value={printCounts[product.id] || 1} 
+                        onChange={(e) => setPrintCounts({ ...printCounts, [product.id]: parseInt(e.target.value) || 1 })}
+                        className="input-field w-20 text-center font-semibold"
+                        disabled={printing}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-medium text-slate-500">Qty:</label>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="1000"
-                      value={printCounts[product.id] || 1} 
-                      onChange={(e) => setPrintCounts({ ...printCounts, [product.id]: parseInt(e.target.value) || 1 })}
-                      className="input-field w-20 text-center font-semibold"
-                      disabled={printing}
-                    />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
             
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
@@ -419,6 +452,13 @@ export default function ProductsPage() {
       <div className="absolute top-0 left-[-9999px] opacity-0 pointer-events-none">
         <div id="print-barcodes-container" className="bg-white" style={{ width: '210mm' }}>
           {(() => {
+            const sizeConfig = {
+              small:  { cols: 4, rows: 7, perPage: 28, barcodeWidth: 0.9, barcodeHeight: 25, fontSize: 8, padding: '2mm', gap: '2mm' },
+              medium: { cols: 3, rows: 7, perPage: 21, barcodeWidth: 1.2, barcodeHeight: 40, fontSize: 10, padding: '3mm', gap: '4mm' },
+              large:  { cols: 2, rows: 7, perPage: 14, barcodeWidth: 1.8, barcodeHeight: 55, fontSize: 12, padding: '4mm', gap: '5mm' },
+            };
+            const cfg = sizeConfig[barcodeSize] || sizeConfig.medium;
+
             const printProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
             const duplicatedProducts = [];
             printProducts.forEach(p => {
@@ -428,16 +468,23 @@ export default function ProductsPage() {
               }
             });
             
-            const totalPages = Math.ceil(duplicatedProducts.length / 21) || 1;
+            const totalPages = Math.ceil(duplicatedProducts.length / cfg.perPage) || 1;
             return Array.from({ length: totalPages }).map((_, pageIndex) => (
               <div key={pageIndex}>
-                <div className="p-8" style={{ boxSizing: 'border-box' }}>
-                  <div className="grid grid-cols-3 gap-6">
-                    {duplicatedProducts.slice(pageIndex * 21, (pageIndex + 1) * 21).map(p => (
-                      <div key={p._printId} className="flex flex-col items-center justify-center p-3 border border-slate-300 rounded-lg">
-                        <Barcode value={p.barcode} width={1.2} height={40} fontSize={10} margin={0} />
-                        <span className="text-[10px] font-bold mt-2 text-center truncate w-full" title={p.name}>{p.name}</span>
-                        <span className="text-[10px] text-slate-600 font-semibold">{formatCurrency(p.selling_price)}</span>
+                <div style={{ padding: '6mm 4mm', boxSizing: 'border-box' }}>
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: `repeat(${cfg.cols}, 1fr)`, 
+                    gap: cfg.gap 
+                  }}>
+                    {duplicatedProducts.slice(pageIndex * cfg.perPage, (pageIndex + 1) * cfg.perPage).map(p => (
+                      <div key={p._printId} style={{ 
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+                        padding: cfg.padding, border: '1px solid #cbd5e1', borderRadius: '4px' 
+                      }}>
+                        <Barcode value={p.barcode} width={cfg.barcodeWidth} height={cfg.barcodeHeight} fontSize={cfg.fontSize} margin={0} />
+                        <span style={{ fontSize: `${cfg.fontSize}px`, fontWeight: 'bold', marginTop: '2px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }} title={p.name}>{p.name}</span>
+                        <span style={{ fontSize: `${cfg.fontSize}px`, color: '#475569', fontWeight: '600' }}>{formatCurrency(p.selling_price)}</span>
                       </div>
                     ))}
                   </div>

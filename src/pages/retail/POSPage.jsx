@@ -513,105 +513,104 @@ export default function POSPage() {
         </div>
 
         {/* Right: Checkout Panel */}
-        <div className="w-96 flex flex-col bg-white border-l border-slate-200 z-30 shadow-2xl">
+        <div className="w-96 flex flex-col bg-white border-l border-slate-200 z-30 shadow-2xl relative">
           
-          <div className="p-5 overflow-y-auto flex-1 space-y-6">
-            {/* Header info */}
-            {activeDraftId && (
-              <div className="bg-amber-50 text-amber-800 p-3 rounded-xl border border-amber-200 flex items-center gap-2 text-sm font-semibold">
-                <PlayCircle className="w-5 h-5 text-amber-600" /> Resumed Draft Mode
-              </div>
-            )}
+          <div className="p-4 flex-1 flex flex-col justify-between">
+            <div className="space-y-4">
+              
+              {/* Resumed Draft Badge */}
+              {activeDraftId && (
+                <div className="bg-amber-50 text-amber-800 p-2 rounded-lg border border-amber-200 flex items-center gap-2 text-xs font-bold">
+                  <PlayCircle className="w-4 h-4 text-amber-600" /> Resumed Draft Mode
+                </div>
+              )}
 
-            {/* Customer Details */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-end">
-                <h3 className="font-bold text-slate-800">Customer Info</h3>
-                <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="text-xs bg-slate-100 text-slate-600 border-none rounded-lg px-2 py-1 outline-none font-medium">
-                  {branches.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
-                </select>
+              {/* Customer Info Row */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-slate-800 text-sm">Customer Details</h3>
+                  <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="text-[11px] bg-slate-100 text-slate-600 border border-slate-200 rounded px-1.5 py-0.5 outline-none font-bold">
+                    {branches.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => setCustomerName(e.target.value)} className="input-field bg-slate-50 py-2 text-xs px-3 shadow-sm border-slate-200 focus:border-indigo-400" />
+                  <input type="text" placeholder="Phone (Optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50 py-2 text-xs px-3 shadow-sm border-slate-200 focus:border-indigo-400" />
+                </div>
               </div>
-              <input type="text" placeholder="Customer Name (Walk-in)" value={customerName} onChange={e => setCustomerName(e.target.value)} className="input-field bg-slate-50" />
-              <input type="text" placeholder="Phone Number (Optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50" />
+
+              {/* Payment Methods */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-slate-800 text-sm">Payment Method</h3>
+                  <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 rounded">F7 - F8</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {['CASH', 'UPI', 'CARD', 'SPLIT'].map(m => {
+                    const Icon = PAYMENT_ICONS[m] || CreditCard;
+                    const active = paymentMethod === m;
+                    return (
+                      <button key={m} onClick={() => setPaymentMethod(m)}
+                        className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 transition-all duration-200 shadow-sm ${active ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700 scale-[1.02]' : 'border-slate-100 bg-white text-slate-500 hover:border-indigo-200 hover:bg-slate-50'}`}>
+                        <Icon className={`w-5 h-5 mb-1 ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <span className="text-[10px] font-extrabold tracking-wide">{m}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Discount Row */}
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between gap-3 shadow-sm">
+                <span className="text-xs font-bold text-slate-700 whitespace-nowrap">Discount</span>
+                <div className="flex gap-2 flex-1">
+                  <select value={discountType} onChange={e => {setDiscountType(e.target.value); setDiscountValue(0);}} className="input-field bg-white py-1.5 text-xs px-2 border-slate-200 shadow-sm w-20">
+                    <option value="NONE">None</option>
+                    <option value="PERCENTAGE">%</option>
+                    <option value="FIXED">₹</option>
+                  </select>
+                  <input type="number" disabled={discountType === 'NONE'} value={discountValue} onChange={e => setDiscountValue(parseFloat(e.target.value)||0)} className="input-field bg-white py-1.5 text-xs px-2 border-slate-200 shadow-sm flex-1 font-semibold" placeholder="0" />
+                </div>
+              </div>
+
+              {/* Cash Received Row */}
+              {paymentMethod === 'CASH' && (
+                <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 flex items-center justify-between gap-3 shadow-sm">
+                  <span className="text-xs font-bold text-emerald-800 whitespace-nowrap">Cash Received</span>
+                  <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={grandTotal} className="flex-1 input-field bg-white text-base font-bold font-mono text-emerald-700 border-emerald-300 py-1.5 px-3 focus:border-emerald-500 shadow-sm text-right" />
+                </div>
+              )}
             </div>
-
-            <hr className="border-slate-100" />
-
-            {/* Payment Method */}
-            <div className="space-y-3">
-              <h3 className="font-bold text-slate-800 flex justify-between">
-                Payment Method 
-                <span className="text-xs font-normal text-slate-400">F7-F8</span>
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {['CASH', 'UPI', 'CARD', 'SPLIT'].map(m => {
-                  const Icon = PAYMENT_ICONS[m] || CreditCard;
-                  const active = paymentMethod === m;
-                  return (
-                    <button key={m} onClick={() => setPaymentMethod(m)}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-200 ${active ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 bg-white text-slate-500 hover:border-indigo-200 hover:bg-slate-50'}`}>
-                      <Icon className={`w-6 h-6 mb-2 ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
-                      <span className="text-xs font-bold">{m}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <hr className="border-slate-100" />
-
-            {/* Discount */}
-            <div className="space-y-3">
-              <h3 className="font-bold text-slate-800">Discount</h3>
-              <div className="flex gap-2">
-                <select value={discountType} onChange={e => {setDiscountType(e.target.value); setDiscountValue(0);}} className="input-field bg-slate-50 w-1/3">
-                  <option value="NONE">None</option>
-                  <option value="PERCENTAGE">%</option>
-                  <option value="FIXED">Fixed (₹)</option>
-                </select>
-                <input type="number" disabled={discountType === 'NONE'} value={discountValue} onChange={e => setDiscountValue(parseFloat(e.target.value)||0)} className="input-field bg-slate-50 flex-1" placeholder="0" />
-              </div>
-            </div>
-
-            {/* Amount Received */}
-            {paymentMethod === 'CASH' && (
-              <div className="space-y-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                <h3 className="font-bold text-emerald-800">Cash Received</h3>
-                <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={grandTotal} className="w-full text-2xl font-bold font-mono text-emerald-700 bg-white border-2 border-emerald-200 rounded-xl px-4 py-3 outline-none focus:border-emerald-500 transition-colors" />
-              </div>
-            )}
-            
-            <textarea placeholder="Add note (optional)" value={notes} onChange={e => setNotes(e.target.value)} className="input-field bg-slate-50 text-sm" rows={2} />
           </div>
 
           {/* Checkout Totals */}
-          <div className="bg-white border-t border-slate-100 p-5 pb-6 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
-            <div className="space-y-2.5 mb-5 text-sm font-medium text-slate-500">
+          <div className="bg-slate-50/50 border-t border-slate-200 p-4 shrink-0">
+            <div className="space-y-1.5 mb-4 text-sm font-medium text-slate-500">
               <div className="flex justify-between items-center"><span>Subtotal</span><span className="text-slate-800 font-semibold">{formatCurrency(subtotal)}</span></div>
               <div className="flex justify-between items-center"><span>Tax (GST)</span><span className="text-slate-800 font-semibold">{formatCurrency(taxTotal)}</span></div>
               {overallDisc > 0 && <div className="flex justify-between items-center text-rose-500"><span>Discount</span><span className="font-semibold">-{formatCurrency(overallDisc)}</span></div>}
               {roundOff !== 0 && <div className="flex justify-between items-center"><span>Round Off</span><span className="text-slate-800 font-semibold">{roundOff > 0 ? '+' : ''}{roundOff.toFixed(2)}</span></div>}
             </div>
             
-            <div className="flex justify-between items-end mb-6 pt-4 border-t border-slate-100">
-              <span className="text-slate-800 font-bold uppercase tracking-widest text-sm">Total</span>
-              <span className="text-4xl font-black text-indigo-600 tracking-tight">{formatCurrency(grandTotal)}</span>
+            <div className="flex justify-between items-end mb-4 pt-4 border-t border-slate-200">
+              <span className="text-slate-800 font-extrabold uppercase tracking-wider text-sm">Grand Total</span>
+              <span className="text-4xl font-black text-indigo-600 tracking-tighter">{formatCurrency(grandTotal)}</span>
             </div>
 
             {paymentMethod === 'CASH' && changeDue > 0 && (
-              <div className="flex justify-between items-center mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
-                <span className="text-emerald-700 font-bold">Change Due</span>
-                <span className="text-xl font-bold text-emerald-700">{formatCurrency(changeDue)}</span>
+              <div className="flex justify-between items-center mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm">
+                <span className="text-emerald-800 font-bold text-sm">Change Due</span>
+                <span className="text-2xl font-black text-emerald-600">{formatCurrency(changeDue)}</span>
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-3">
-              <button onClick={handleHoldBill} disabled={cart.length === 0 || submitting} className="col-span-1 py-4 rounded-xl bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 font-bold flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50 shadow-sm">
-                <PauseCircle className="w-5 h-5" />
-                <span className="text-xs">Draft (F4)</span>
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={handleHoldBill} disabled={cart.length === 0 || submitting} className="col-span-1 py-3 rounded-xl bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold flex flex-col items-center justify-center gap-1 transition-all disabled:opacity-50 shadow-sm">
+                <PauseCircle className="w-5 h-5 text-slate-400" />
+                <span className="text-[10px] uppercase tracking-wider">Draft (F4)</span>
               </button>
-              <button onClick={handleSubmit} disabled={cart.length === 0 || submitting} className="col-span-2 py-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none">
-                <Printer className="w-6 h-6" />
+              <button onClick={handleSubmit} disabled={cart.length === 0 || submitting} className="col-span-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 disabled:opacity-50 disabled:shadow-none">
+                <Printer className="w-5 h-5" />
                 {submitting ? 'PROCESSING' : 'PAY (F9)'}
               </button>
             </div>
