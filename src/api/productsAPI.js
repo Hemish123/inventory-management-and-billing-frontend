@@ -54,3 +54,13 @@ export const updateSupplier = (id, data) =>
 
 export const deleteSupplier = (id) =>
   apiCall(() => api.delete(`/products/suppliers/${id}/`));
+
+// ── PDF Upload ──
+export const uploadProductsPDF = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiCall(() => api.post('/products/upload-pdf/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000, // 2 min timeout for AI processing
+  }));
+};

@@ -5,10 +5,10 @@ import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
-import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, createCategory, getBrands, createBrand, getProductStock } from '../../api/productsAPI';
+import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, createCategory, getBrands, createBrand, getProductStock, uploadProductsPDF } from '../../api/productsAPI';
 import { getSuppliers, createSupplier } from '../../api/productsAPI';
 import { formatCurrency } from '../../utils/formatters';
-import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer } from 'lucide-react';
+import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer, Upload, FileUp, X, Check, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Barcode from 'react-barcode';
 import html2pdf from 'html2pdf.js';
@@ -32,6 +32,12 @@ export default function ProductsPage() {
   const [printCounts, setPrintCounts] = useState({});
   const [barcodeSize, setBarcodeSize] = useState('medium'); // 'small' | 'medium' | 'large'
   const [printing, setPrinting] = useState(false);
+
+  // PDF Upload State
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [pdfReviewProducts, setPdfReviewProducts] = useState([]);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   const [form, setForm] = useState({
     name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
@@ -245,10 +251,16 @@ export default function ProductsPage() {
               </button>
             )}
             {!isEmployee && (
-              <button onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
-                <Plus className="w-4 h-4" /> Add Product
-              </button>
+              <>
+                {/* <button onClick={() => setShowUploadModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-sm font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all shadow-lg shadow-emerald-500/20 whitespace-nowrap">
+                  <Upload className="w-4 h-4" /> Upload PDF
+                </button> */}
+                <button onClick={() => setShowModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
+                  <Plus className="w-4 h-4" /> Add Product
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -548,6 +560,153 @@ export default function ProductsPage() {
           })()}
         </div>
       </div>
+
+      {/* PDF Upload Modal */}
+      {showUploadModal && (
+        <Modal title="Upload Product PDF" onClose={() => !uploading && setShowUploadModal(false)}>
+          <div className="p-6">
+            <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center hover:border-indigo-400 transition-colors bg-slate-50/50">
+              <FileUp className="w-12 h-12 mx-auto text-indigo-400 mb-4" />
+              <p className="text-slate-700 font-semibold mb-1">Select a PDF file with product details</p>
+              <p className="text-xs text-slate-400 mb-5">AI will extract product information automatically</p>
+              <input
+                type="file"
+                accept=".pdf"
+                id="pdf-upload-input"
+                className="hidden"
+                disabled={uploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploading(true);
+                  const { data, error } = await uploadProductsPDF(file);
+                  setUploading(false);
+                  if (data?.data?.products) {
+                    setPdfReviewProducts(data.data.products);
+                    setShowUploadModal(false);
+                    setShowReviewModal(true);
+                    toast.success(data.message || `${data.data.count} products extracted!`);
+                  } else {
+                    toast.error(error || 'Failed to process PDF');
+                  }
+                  e.target.value = '';
+                }}
+              />
+              {uploading ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                  <p className="text-sm text-indigo-600 font-semibold">AI is extracting products...</p>
+                  <p className="text-xs text-slate-400">This may take 15-30 seconds</p>
+                </div>
+              ) : (
+                <label htmlFor="pdf-upload-input"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all cursor-pointer shadow-lg shadow-indigo-500/20">
+                  <Upload className="w-4 h-4" /> Choose PDF File
+                </label>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* PDF Review / Edit Modal */}
+      {showReviewModal && pdfReviewProducts.length > 0 && (
+        <Modal title={`Review Extracted Products (${pdfReviewProducts.length})`} onClose={() => { setShowReviewModal(false); setPdfReviewProducts([]); loadProducts(); }}>
+          <div className="p-4 space-y-4">
+            <p className="text-sm text-slate-500">Products have been created. You can edit any product below, then click <strong>Save Changes</strong> to update.</p>
+            <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+              {pdfReviewProducts.map((p, idx) => (
+                <div key={p.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/70 hover:bg-white transition-colors">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">#{idx + 1}</span>
+                    <button onClick={() => setPdfReviewProducts(prev => prev.filter(x => x.id !== p.id))}
+                      className="p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors" title="Remove">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Name</label>
+                      <input value={p.name} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, name: e.target.value } : x))}
+                        className="input-field mt-0.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">SKU</label>
+                      <input value={p.sku || ''} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, sku: e.target.value } : x))}
+                        className="input-field mt-0.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Barcode</label>
+                      <input value={p.barcode || ''} disabled className="input-field mt-0.5 text-sm bg-slate-100 text-slate-500" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Category</label>
+                      <input value={p.category_name || ''} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, category_name: e.target.value } : x))}
+                        className="input-field mt-0.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Brand</label>
+                      <input value={p.brand_name || ''} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, brand_name: e.target.value } : x))}
+                        className="input-field mt-0.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Unit</label>
+                      <select value={p.unit || 'Nos'} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, unit: e.target.value } : x))}
+                        className="input-field mt-0.5 text-sm">
+                        {['Nos', 'Kg', 'Ltr', 'Mtr', 'Box', 'Pcs', 'Set', 'Pair', 'Dozen'].map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Selling Price</label>
+                      <input type="number" step="0.01" value={p.selling_price || 0} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, selling_price: e.target.value } : x))}
+                        className="input-field mt-0.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Cost Price</label>
+                      <input type="number" step="0.01" value={p.cost_price || 0} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, cost_price: e.target.value } : x))}
+                        className="input-field mt-0.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase">Tax %</label>
+                      <select value={p.tax_percentage || 18} onChange={e => setPdfReviewProducts(prev => prev.map(x => x.id === p.id ? { ...x, tax_percentage: parseInt(e.target.value) } : x))}
+                        className="input-field mt-0.5 text-sm">
+                        {[0, 5, 12, 18, 28].map(t => <option key={t} value={t}>{t}%</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+              <span className="text-sm text-slate-500">{pdfReviewProducts.length} product(s)</span>
+              <div className="flex gap-2">
+                <button onClick={() => { setShowReviewModal(false); setPdfReviewProducts([]); loadProducts(); }}
+                  className="btn-secondary px-4 py-2">Done</button>
+                <button onClick={async () => {
+                  let updated = 0;
+                  for (const p of pdfReviewProducts) {
+                    const payload = {
+                      name: p.name, sku: p.sku, barcode: p.barcode, description: p.description,
+                      category: p.category_name || '', brand: p.brand_name || '',
+                      unit: p.unit, cost_price: p.cost_price, selling_price: p.selling_price,
+                      hsn_code: p.hsn_code, tax_percentage: p.tax_percentage,
+                    };
+                    const { data } = await updateProduct(p.id, payload);
+                    if (data) updated++;
+                  }
+                  toast.success(`${updated} product(s) updated!`);
+                  setShowReviewModal(false);
+                  setPdfReviewProducts([]);
+                  loadProducts();
+                }}
+                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all shadow-lg shadow-emerald-500/20">
+                  <Check className="w-4 h-4" /> Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

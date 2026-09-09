@@ -61,7 +61,7 @@ export default function Users() {
     setSubmitting(false);
     
     if (data) {
-      toast.success(editId ? 'User updated successfully' : 'User created successfully. Default password is Password123!');
+      toast.success(editId ? 'User updated successfully' : 'User created successfully. A generated password has been sent to their email.');
       handleCloseModal();
       loadData();
     } else {
@@ -213,7 +213,7 @@ export default function Users() {
 
             {!editId && (
               <div className="bg-amber-50 text-amber-700 text-xs p-3 rounded-lg border border-amber-100 mt-2">
-                <strong>Note:</strong> The user's default password will be set to <code>Password123!</code>. They will be required to change it upon first login.
+                <strong>Note:</strong> A generated password will be sent to the user's email address. They will be required to change it upon first login.
               </div>
             )}
 

@@ -4,7 +4,7 @@ import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import {
   getSalesReport, getPurchaseReport, getInventoryReport, getTopProducts,
   getLowStockReport, getDeadStockReport, getBranchSalesReport,
-  getSupplierPurchaseReport, getCustomerPurchaseReport,
+  getEmployeeSalesReport, getSupplierPurchaseReport, getCustomerPurchaseReport,
   getProfitReport, getStockValuation, exportCSV,
 } from '../../api/reportsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
@@ -26,6 +26,7 @@ const REPORT_CARDS = [
   { id: 'low-stock', label: 'Low Stock Alert', desc: 'Below minimum levels', icon: AlertTriangle, color: 'rose' },
   { id: 'dead-stock', label: 'Dead Stock', desc: 'No sales in 90 days', icon: Skull, color: 'slate' },
   { id: 'branch-sales', label: 'Branch Sales', desc: 'Compare branch performance', icon: MapPin, color: 'indigo' },
+  { id: 'employee-sales', label: 'Employee Sales', desc: 'Performance by employee', icon: Users, color: 'sky' },
   { id: 'supplier-purchases', label: 'Supplier Purchases', desc: 'Purchases by supplier', icon: Truck, color: 'cyan' },
   { id: 'customer-purchases', label: 'Customer Purchases', desc: 'Top customers by spend', icon: Users, color: 'purple' },
   { id: 'profit', label: 'Profit Report', desc: 'Revenue vs cost analysis', icon: DollarSign, color: 'emerald' },
@@ -40,6 +41,7 @@ const FETCHERS = {
   'low-stock': getLowStockReport,
   'dead-stock': getDeadStockReport,
   'branch-sales': getBranchSalesReport,
+  'employee-sales': getEmployeeSalesReport,
   'supplier-purchases': getSupplierPurchaseReport,
   'customer-purchases': getCustomerPurchaseReport,
   'profit': getProfitReport,
@@ -228,6 +230,12 @@ export default function ReportsPage() {
         ],
         'branch-sales': [
           { key: 'branch', label: 'Branch' }, { key: 'code', label: 'Code' },
+          { key: 'revenue', label: 'Revenue', render: v => fmt(v) },
+          { key: 'bills', label: 'Bills' },
+          { key: 'avg_bill', label: 'Avg Bill', render: v => fmt(v) },
+        ],
+        'employee-sales': [
+          { key: 'employee', label: 'Employee' },
           { key: 'revenue', label: 'Revenue', render: v => fmt(v) },
           { key: 'bills', label: 'Bills' },
           { key: 'avg_bill', label: 'Avg Bill', render: v => fmt(v) },

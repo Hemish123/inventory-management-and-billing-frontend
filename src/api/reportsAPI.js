@@ -27,6 +27,9 @@ export const getDeadStockReport = (params = {}) =>
 export const getBranchSalesReport = (params = {}) =>
   apiCall(() => api.get('/reports/branch-sales/', { params }));
 
+export const getEmployeeSalesReport = (params = {}) =>
+  apiCall(() => api.get('/reports/employee-sales/', { params }));
+
 export const getSupplierPurchaseReport = (params = {}) =>
   apiCall(() => api.get('/reports/supplier-purchases/', { params }));
 
