@@ -81,7 +81,7 @@ export default function Customers() {
               placeholder="Search customers..."
               className="input-field pl-10" />
           </div>
-          <button onClick={() => navigate('/customers/add')} className="flex items-center gap-2 px-4 py-2.5 bg-[#1a2744] text-white rounded-lg text-sm font-semibold hover:bg-[#243352] transition-all shadow-md whitespace-nowrap">
+          <button onClick={() => navigate('/customers/add')} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
             <Plus className="w-4 h-4" /> Add Customer
           </button>
         </div>
