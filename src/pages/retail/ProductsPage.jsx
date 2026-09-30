@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/common/Navbar';
 import Table from '../../components/common/Table';
@@ -11,7 +11,81 @@ import { formatCurrency } from '../../utils/formatters';
 import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer, Upload, FileUp, X, Check, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Barcode from 'react-barcode';
-import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+
+/*
+ * ── Sticker-sheet size configurations — NJ MPL series ──
+ * All dimensions in mm. Margins center the grid on A4 (210 × 297 mm).
+ *   pageMarginLeft = (210 - cols*labelW - (cols-1)*gapX) / 2
+ *   pageMarginTop  = (297 - rows*labelH - (rows-1)*gapY) / 2
+ *
+ * Fine-tune pageMarginTop / pageMarginLeft / gapX / gapY after a test print.
+ */
+const STICKER_CONFIGS = {
+  l48: {
+    cols: 4, rows: 12, labelW: 48, labelH: 24, gapX: 2, gapY: 0.25,
+    pageMarginTop: 1.125,  // (297 - 12*24 - 11*0.25) / 2
+    pageMarginLeft: 8,     // (210 - 4*48 - 3*2) / 2
+    // Label internals (mm)
+    padTop: 0.5, padBottom: 0.5, padLeft: 1.5, padRight: 1.5,
+    barcodeW: 38, barcodeH: 8,
+    companyFont: 5.5, companyBoxH: 3.5,
+    digitsFont: 5.5, digitsBoxH: 3,
+    nameFont: 5.5, priceFont: 8, bottomRowH: 5,
+    showCompany: true, showName: true, showPrice: true,
+    layout: 'vertical',
+    pdfScale: 3,
+  },
+  l16: {
+    cols: 2, rows: 8, labelW: 99, labelH: 34, gapX: 2, gapY: 1.28,
+    pageMarginTop: 2.52,   // (297 - 8*34 - 7*1.28) / 2
+    pageMarginLeft: 4,     // (210 - 2*99 - 1*2) / 2 = 5 → use 4 for safety
+    padTop: 1.5, padBottom: 1.5, padLeft: 2, padRight: 2,
+    leftColW: 50, rightColW: 43,
+    barcodeW: 46, barcodeH: 14,
+    digitsFont: 7, digitsBoxH: 4,
+    companyFont: 7, companyBoxH: 5,
+    nameFont: 8, nameBoxH: 9, // 2 lines
+    priceFont: 14, priceBoxH: 8,
+    showCompany: true, showName: true, showPrice: true,
+    layout: 'horizontal',
+    pdfScale: 3,
+  },
+  l40: {
+    cols: 10, rows: 4, labelW: 18, labelH: 73, gapX: 1, gapY: 1,
+    pageMarginTop: 1.5,
+    pageMarginLeft: 1.5,
+    barcodeW: 48, barcodeH: 4.5,
+    companyFont: 5,
+    digitsFont: 5,
+    nameFont: 5, priceFont: 7,
+    showCompany: true, showName: true, showPrice: true,
+    layout: 'rotated',
+    pdfScale: 4,
+  },
+  l110: {
+    cols: 5, rows: 22, labelW: 35, labelH: 10, gapX: 2, gapY: 2.5,
+    pageMarginTop: 3.75,
+    pageMarginLeft: 7.5,
+    barcodeW: 19, barcodeH: 2,
+    digitsFont: 3,
+    companyFont: 3.5,
+    nameFont: 3.5,
+    priceFont: 5,
+    showCompany: true, showName: true, showPrice: true,
+    layout: 'tiny',
+    pdfScale: 4,
+  },
+};
+
+// Recalculate l110 margins: 22*10 + 21*2.5 = 220 + 52.5 = 272.5 → (297-272.5)/2 = 12.25
+STICKER_CONFIGS.l110.pageMarginTop = 12.25;
+
+/* Decide barcode format: CODE128C for all-digit even-length, else CODE128 */
+function barcodeFormat(val) {
+  return /^\d+$/.test(val) && val.length % 2 === 0 ? 'CODE128C' : 'CODE128';
+}
 
 export default function ProductsPage() {
   const { user } = useAuth();
@@ -24,20 +98,23 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  
+
   // Selection and Printing State
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [barcodeModal, setBarcodeModal] = useState({ isOpen: false, product: null });
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printCounts, setPrintCounts] = useState({});
-  const [barcodeSize, setBarcodeSize] = useState('medium'); // 'small' | 'medium' | 'large'
+  const [barcodeSize, setBarcodeSize] = useState('l48'); // 'l40' | 'l16' | 'l110' | 'l48'
   const [printing, setPrinting] = useState(false);
+  const [showCutGuides, setShowCutGuides] = useState(false);
 
   // PDF Upload State
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pdfReviewProducts, setPdfReviewProducts] = useState([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
+
+  const pagesContainerRef = useRef(null);
 
   const [form, setForm] = useState({
     name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
@@ -92,7 +169,7 @@ export default function ProductsPage() {
     if (!payload.barcode) delete payload.barcode;
     delete payload.supplier_name;
 
-    const { data, error } = editingId 
+    const { data, error } = editingId
       ? await updateProduct(editingId, payload)
       : await createProduct(payload);
 
@@ -100,8 +177,10 @@ export default function ProductsPage() {
       toast.success(editingId ? 'Product updated' : 'Product created');
       setShowModal(false);
       setEditingId(null);
-      setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
-        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 });
+      setForm({
+        name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
+        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20
+      });
       loadProducts();
     } else toast.error(error || 'Failed');
   };
@@ -147,7 +226,7 @@ export default function ProductsPage() {
       toast.error('None of the selected products have a barcode assigned.');
       return;
     }
-    
+
     const initialCounts = {};
     validProducts.forEach(p => {
       initialCounts[p.id] = 1;
@@ -156,82 +235,377 @@ export default function ProductsPage() {
     setShowPrintModal(true);
   };
 
-  const generatePDF = () => {
+  /* ── PDF generation ── */
+  const generatePDF = async () => {
     setPrinting(true);
-    const element = document.getElementById('print-barcodes-container');
-    const opt = {
-      margin: 0,
-      filename: `barcodes_${new Date().getTime()}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    
-    setTimeout(() => {
-      html2pdf().set(opt).from(element).save().then(() => {
-        setPrinting(false);
-        setShowPrintModal(false);
-      }).catch(() => {
-        toast.error('Failed to generate PDF');
-        setPrinting(false);
-      });
-    }, 300);
+    try {
+      const cfg = STICKER_CONFIGS[barcodeSize] || STICKER_CONFIGS.l48;
+
+      // Wait for fonts and a short render tick
+      await document.fonts.ready;
+      await new Promise(r => setTimeout(r, 400));
+
+      const container = pagesContainerRef.current;
+      if (!container) throw new Error('Print container not found');
+
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+      if (cfg.layout === 'rotated') {
+        /* ── L40 special path: capture each horizontal label, rotate 90°, compose onto pages ── */
+        const sourceEls = container.querySelectorAll('.l40-source');
+        if (sourceEls.length === 0) throw new Error('No L40 labels found');
+
+        // Capture each label individually (horizontal 73×18mm)
+        const rotatedImages = [];
+        for (const srcEl of sourceEls) {
+          const c = await html2canvas(srcEl, {
+            scale: cfg.pdfScale,
+            backgroundColor: '#ffffff',
+            useCORS: true, logging: false, scrollY: 0,
+            windowWidth: srcEl.scrollWidth,
+            windowHeight: srcEl.scrollHeight,
+          });
+          // Rotate canvas 90° clockwise: (w×h) → (h×w)
+          const rc = document.createElement('canvas');
+          rc.width = c.height;
+          rc.height = c.width;
+          const ctx = rc.getContext('2d');
+          ctx.translate(rc.width, 0);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(c, 0, 0);
+          rotatedImages.push(rc.toDataURL('image/png'));
+        }
+
+        // Compose rotated images onto PDF pages in a grid
+        const { cols, rows, labelW, labelH, gapX, gapY, pageMarginTop, pageMarginLeft } = cfg;
+        const perPage = cols * rows;
+        const totalPdfPages = Math.ceil(rotatedImages.length / perPage);
+
+        for (let pg = 0; pg < totalPdfPages; pg++) {
+          if (pg > 0) pdf.addPage();
+          for (let i = 0; i < perPage; i++) {
+            const idx = pg * perPage + i;
+            if (idx >= rotatedImages.length) break;
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const x = pageMarginLeft + col * (labelW + gapX);
+            const y = pageMarginTop + row * (labelH + gapY);
+            pdf.addImage(rotatedImages[idx], 'PNG', x, y, labelW, labelH);
+          }
+        }
+      } else {
+        /* ── Standard path: capture each page as a whole ── */
+        const pageEls = container.querySelectorAll('.label-page');
+        if (pageEls.length === 0) throw new Error('No pages to print');
+
+        for (let i = 0; i < pageEls.length; i++) {
+          const canvas = await html2canvas(pageEls[i], {
+            scale: cfg.pdfScale,
+            backgroundColor: '#ffffff',
+            useCORS: true, logging: false, scrollY: 0,
+            windowWidth: pageEls[i].scrollWidth,
+            windowHeight: pageEls[i].scrollHeight,
+          });
+          const imgData = canvas.toDataURL('image/png');
+          if (i > 0) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+        }
+      }
+
+      pdf.save(`barcodes_${Date.now()}.pdf`);
+      setPrinting(false);
+      setShowPrintModal(false);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      toast.error('Failed to generate PDF');
+      setPrinting(false);
+    }
   };
 
   const columns = [
-    { key: 'name', label: 'Product', sortable: true, render: (val, row) => (
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-          <Package className="w-4 h-4 text-indigo-500" />
+    {
+      key: 'name', label: 'Product', sortable: true, render: (val, row) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Package className="w-4 h-4 text-indigo-500" />
+          </div>
+          <div>
+            <p className="font-medium text-slate-800 text-sm">{val}</p>
+            <p className="text-xs text-slate-400">SKU: {row.sku || 'N/A'}</p>
+          </div>
         </div>
-        <div>
-          <p className="font-medium text-slate-800 text-sm">{val}</p>
-          <p className="text-xs text-slate-400">SKU: {row.sku || 'N/A'}</p>
-        </div>
-      </div>
-    )},
-    { key: 'barcode', label: 'Barcode', sortable: true, render: (val, row) => (
-      val ? (
-        <button onClick={(e) => { e.stopPropagation(); setBarcodeModal({ isOpen: true, product: row }); }} 
-          className="text-indigo-600 hover:underline font-mono text-sm transition-colors hover:text-indigo-800">
-          {val}
-        </button>
-      ) : '-'
-    )},
+      )
+    },
+    {
+      key: 'barcode', label: 'Barcode', sortable: true, render: (val, row) => (
+        val ? (
+          <button onClick={(e) => { e.stopPropagation(); setBarcodeModal({ isOpen: true, product: row }); }}
+            className="text-indigo-600 hover:underline font-mono text-sm transition-colors hover:text-indigo-800">
+            {val}
+          </button>
+        ) : '-'
+      )
+    },
     { key: 'category_name', label: 'Category', sortable: true },
     { key: 'selling_price', label: 'Price', sortable: true, render: v => formatCurrency(v) },
     { key: 'cost_price', label: 'Cost', sortable: true, render: v => formatCurrency(v) },
-    { key: 'total_stock', label: 'Stock', sortable: true, render: (v, row) => (
-      <div className="flex flex-col">
-        <div className="flex items-center gap-2">
-          <span className={`font-semibold text-sm ${(v || 0) < row.minimum_stock_level ? 'text-rose-600' : (v || 0) <= row.reorder_level ? 'text-amber-500' : 'text-emerald-600'}`}>
-            {v || 0}
-            {(v || 0) < row.minimum_stock_level && <AlertTriangle className="w-3 h-3 inline ml-1" />}
-          </span>
-          <button onClick={(e) => handleViewStock(e, row)} className="text-slate-400 hover:text-indigo-600 transition-colors">
-            <Info className="w-4 h-4" />
-          </button>
+    {
+      key: 'total_stock', label: 'Stock', sortable: true, render: (v, row) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <span className={`font-semibold text-sm ${(v || 0) < row.minimum_stock_level ? 'text-rose-600' : (v || 0) <= row.reorder_level ? 'text-amber-500' : 'text-emerald-600'}`}>
+              {v || 0}
+              {(v || 0) < row.minimum_stock_level && <AlertTriangle className="w-3 h-3 inline ml-1" />}
+            </span>
+            <button onClick={(e) => handleViewStock(e, row)} className="text-slate-400 hover:text-indigo-600 transition-colors">
+              <Info className="w-4 h-4" />
+            </button>
+          </div>
+          <span className="text-[10px] text-slate-400">Min: {row.minimum_stock_level} | Reorder: {row.reorder_level}</span>
         </div>
-        <span className="text-[10px] text-slate-400">Min: {row.minimum_stock_level} | Reorder: {row.reorder_level}</span>
+      )
+    },
+    {
+      key: 'actions', label: '', render: (_, row) => (
+        <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+          {!isEmployee && (
+            <>
+              <button onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
+                className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button onClick={(e) => handleDelete(e, row.id, row.name)}
+                className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+      )
+    },
+  ];
+
+  /* ── Build duplicated label list and page data ── */
+  const cfg = STICKER_CONFIGS[barcodeSize] || STICKER_CONFIGS.l48;
+  const perPage = cfg.cols * cfg.rows;
+  const companyName = user?.company_name || '';
+  const ff = 'Arial, Helvetica, sans-serif';
+  const border = showCutGuides ? '1px dashed #cbd5e1' : 'none';
+
+  const printProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
+  const duplicatedProducts = [];
+  printProducts.forEach(p => {
+    const count = printCounts[p.id] || 1;
+    for (let i = 0; i < count; i++) {
+      duplicatedProducts.push({ ...p, _printId: `${p.id}-${i}` });
+    }
+  });
+  const totalPages = Math.ceil(duplicatedProducts.length / perPage) || 1;
+
+  /* ── SVG barcode component with exact mm sizing ── */
+  let barcodeIdx = 0;
+  const SizedBarcode = ({ value, widthMM, heightMM }) => {
+    const fmt = barcodeFormat(value);
+    const cls = `bc-${widthMM}-${heightMM}-${barcodeIdx++}`.replace(/\./g, '_');
+    return (
+      <div className={cls} style={{ width: `${widthMM}mm`, height: `${heightMM}mm`, overflow: 'hidden', lineHeight: 0, flexShrink: 0 }}>
+        <Barcode
+          value={value}
+          format={fmt}
+          renderer="svg"
+          displayValue={false}
+          margin={0}
+          width={2}
+          height={100}
+          background="transparent"
+        />
+        <style>{`
+          .${cls} > svg {
+            width: ${widthMM}mm !important;
+            height: ${heightMM}mm !important;
+          }
+        `}</style>
       </div>
-    )},
-    { key: 'actions', label: '', render: (_, row) => (
-      <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-        {!isEmployee && (
-          <>
-            <button onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
-              className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
-              <Pencil className="w-4 h-4" />
-            </button>
-            <button onClick={(e) => handleDelete(e, row.id, row.name)}
-              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-full transition-colors">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </>
+    );
+  };
+
+  /* ── Per-layout label renderers ── */
+  const renderLabelL48 = (p) => (
+    <div key={p._printId} style={{
+      width: `${cfg.labelW}mm`, height: `${cfg.labelH}mm`, boxSizing: 'border-box',
+      border, overflow: 'hidden', backgroundColor: '#fff',
+      padding: `${cfg.padTop}mm ${cfg.padRight}mm ${cfg.padBottom}mm ${cfg.padLeft}mm`,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      {/* Company */}
+      {cfg.showCompany && companyName && (
+        <div style={{ width: '100%', minHeight: `${cfg.companyBoxH}mm`, maxHeight: `${cfg.companyBoxH}mm`, fontSize: `${cfg.companyFont}pt`,
+          fontWeight: 'bold', textTransform: 'uppercase', color: '#000', fontFamily: ff,
+          lineHeight: `${cfg.companyBoxH}mm`, overflow: 'visible', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center',
+          flexShrink: 0,
+        }}>{companyName}</div>
+      )}
+      {/* Barcode */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
+      </div>
+      {/* Digits */}
+      <div style={{ width: '100%', minHeight: `${cfg.digitsBoxH}mm`, fontSize: `${cfg.digitsFont}pt`,
+        color: '#000', fontFamily: ff, lineHeight: `${cfg.digitsBoxH}mm`, textAlign: 'center',
+        flexShrink: 0,
+      }}>{p.barcode}</div>
+      {/* Name + Price row */}
+      <div style={{ width: '100%', minHeight: `${cfg.bottomRowH}mm`, maxHeight: `${cfg.bottomRowH}mm`, display: 'flex', alignItems: 'center', gap: '1mm', flexShrink: 0 }}>
+        {cfg.showName && (
+          <div style={{ flex: 1, minWidth: 0, fontSize: `${cfg.nameFont}pt`, fontWeight: 'bold',
+            color: '#000', fontFamily: ff, lineHeight: `${cfg.bottomRowH}mm`,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }} title={p.name}>{p.name}</div>
+        )}
+        {cfg.showPrice && (
+          <div style={{ flexShrink: 0, fontSize: `${cfg.priceFont}pt`, fontWeight: 900,
+            color: '#000', fontFamily: ff, lineHeight: `${cfg.bottomRowH}mm`, whiteSpace: 'nowrap',
+          }}>{formatCurrency(p.selling_price)}</div>
         )}
       </div>
-    )},
-  ];
+    </div>
+  );
+
+  const renderLabelL16 = (p) => (
+    <div key={p._printId} style={{
+      width: `${cfg.labelW}mm`, height: `${cfg.labelH}mm`, boxSizing: 'border-box',
+      border, overflow: 'hidden', backgroundColor: '#fff',
+      padding: `${cfg.padTop}mm ${cfg.padRight}mm ${cfg.padBottom}mm ${cfg.padLeft}mm`,
+      display: 'flex', alignItems: 'center', gap: '2mm',
+    }}>
+      {/* LEFT column: barcode + digits */}
+      <div style={{ width: `${cfg.leftColW}mm`, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
+        <div style={{ width: '100%', minHeight: `${cfg.digitsBoxH}mm`, fontSize: `${cfg.digitsFont}pt`,
+          color: '#000', fontFamily: ff, lineHeight: `${cfg.digitsBoxH}mm`, textAlign: 'center',
+          flexShrink: 0,
+        }}>{p.barcode}</div>
+      </div>
+      {/* RIGHT column: company, name, price */}
+      <div style={{ width: `${cfg.rightColW}mm`, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', gap: '0.5mm',
+      }}>
+        {cfg.showCompany && companyName && (
+          <div style={{ minHeight: `${cfg.companyBoxH}mm`, maxHeight: `${cfg.companyBoxH}mm`, fontSize: `${cfg.companyFont}pt`,
+            fontWeight: 'bold', textTransform: 'uppercase', color: '#000', fontFamily: ff,
+            lineHeight: `${cfg.companyBoxH}mm`, overflow: 'visible', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}>{companyName}</div>
+        )}
+        {cfg.showName && (
+          <div style={{ minHeight: `${cfg.nameBoxH}mm`, maxHeight: `${cfg.nameBoxH}mm`, fontSize: `${cfg.nameFont}pt`,
+            fontWeight: 'bold', color: '#000', fontFamily: ff, lineHeight: 1.3,
+            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+            flexShrink: 0,
+          }} title={p.name}>{p.name}</div>
+        )}
+        {cfg.showPrice && (
+          <div style={{ minHeight: `${cfg.priceBoxH}mm`, fontSize: `${cfg.priceFont}pt`,
+            fontWeight: 900, color: '#000', fontFamily: ff, lineHeight: `${cfg.priceBoxH}mm`,
+            display: 'flex', alignItems: 'center', flexShrink: 0,
+          }}>{formatCurrency(p.selling_price)}</div>
+        )}
+      </div>
+    </div>
+  );
+
+  /* L40: rendered HORIZONTALLY (73mm wide × 18mm tall), then canvas is rotated 90° in generatePDF.
+   * Pure absolute positioning with NO height and NO overflow:hidden to prevent html2canvas from 
+   * arbitrarily clipping ascenders/descenders on tight bounding boxes. */
+  const renderLabelL40 = (p) => (
+    <div key={p._printId} className="l40-source" style={{
+      width: `${cfg.labelH}mm`, height: `${cfg.labelW}mm`, boxSizing: 'border-box',
+      border, overflow: 'hidden', backgroundColor: '#fff', position: 'relative'
+    }}>
+      {/* Company */}
+      {cfg.showCompany && companyName && (
+        <div style={{ position: 'absolute', top: '0.5mm', left: '2mm', right: '2mm',
+          fontSize: `${cfg.companyFont}pt`, fontWeight: 'bold', textTransform: 'uppercase',
+          color: '#000', fontFamily: ff, textAlign: 'center', whiteSpace: 'nowrap'
+        }}>{companyName}</div>
+      )}
+
+      {/* Barcode — pushed down to 5mm for clear gap from company name */}
+      <div style={{ position: 'absolute', top: '5mm', left: '0', right: '0',
+        display: 'flex', justifyContent: 'center'
+      }}>
+        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
+      </div>
+
+      {/* Digits */}
+      <div style={{ position: 'absolute', top: '10mm', left: '0', right: '0',
+        fontSize: `${cfg.digitsFont}pt`, color: '#000', fontFamily: ff, textAlign: 'center', whiteSpace: 'nowrap'
+      }}>{p.barcode}</div>
+
+      {/* Name */}
+      {cfg.showName && (
+        <div style={{ position: 'absolute', top: '13mm', left: '2mm', right: '16mm',
+          fontSize: `${cfg.nameFont}pt`, fontWeight: 'bold',
+          color: '#000', fontFamily: ff, whiteSpace: 'nowrap', textAlign: 'left'
+        }} title={p.name}>{p.name}</div>
+      )}
+
+      {/* Price */}
+      {cfg.showPrice && (
+        <div style={{ position: 'absolute', top: '13mm', right: '2mm',
+          fontSize: `${cfg.priceFont}pt`, fontWeight: 900, color: '#000',
+          fontFamily: ff, textAlign: 'right', whiteSpace: 'nowrap'
+        }}>{formatCurrency(p.selling_price)}</div>
+      )}
+    </div>
+  );
+
+  /* L110 (35×10mm): pure absolute positioning without overflow:hidden */
+  const renderLabelL110 = (p) => (
+    <div key={p._printId} style={{
+      width: `${cfg.labelW}mm`, height: `${cfg.labelH}mm`, boxSizing: 'border-box',
+      border, overflow: 'hidden', backgroundColor: '#fff', position: 'relative'
+    }}>
+      {/* Company Name */}
+      {cfg.showCompany && companyName && (
+        <div style={{ position: 'absolute', top: '0.3mm', left: '1mm', right: '1mm',
+          fontSize: `${cfg.companyFont}pt`, fontWeight: 'bold', color: '#000', fontFamily: ff,
+          textAlign: 'center', whiteSpace: 'nowrap'
+        }}>{companyName}</div>
+      )}
+      {/* Product name */}
+      {cfg.showName && (
+        <div style={{ position: 'absolute', top: '2mm', left: '1mm', right: '1mm',
+          fontSize: `${cfg.nameFont}pt`, fontWeight: 'bold', color: '#000', fontFamily: ff,
+          textAlign: 'center', whiteSpace: 'nowrap'
+        }}>{p.name}</div>
+      )}
+      {/* Barcode — gap from product name, shorter 2mm height */}
+      <div style={{ position: 'absolute', top: '4.5mm', left: '1mm', width: `${cfg.barcodeW}mm` }}>
+        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
+      </div>
+      {/* Digits */}
+      <div style={{ position: 'absolute', top: '6.8mm', left: '1mm', width: `${cfg.barcodeW}mm`,
+        fontSize: `${cfg.digitsFont}pt`, color: '#000', fontFamily: ff, textAlign: 'center', whiteSpace: 'nowrap'
+      }}>{p.barcode}</div>
+      {/* Price */}
+      {cfg.showPrice && (
+        <div style={{ position: 'absolute', top: '5mm', right: '1mm',
+          fontSize: `${cfg.priceFont}pt`, fontWeight: 900, color: '#000', fontFamily: ff,
+          textAlign: 'right', whiteSpace: 'nowrap'
+        }}>{formatCurrency(p.selling_price)}</div>
+      )}
+    </div>
+  );
+
+  const renderLabel = (p) => {
+    if (cfg.layout === 'horizontal') return renderLabelL16(p);
+    if (cfg.layout === 'rotated') return renderLabelL40(p);
+    if (cfg.layout === 'tiny') return renderLabelL110(p);
+    return renderLabelL48(p);
+  };
 
   return (
     <div className="flex-1 overflow-y-auto relative">
@@ -267,12 +641,12 @@ export default function ProductsPage() {
 
         <div className="glass-card overflow-hidden">
           {loading ? <div className="p-6"><SkeletonTable rows={8} cols={6} /></div> : (
-            <Table 
-              columns={columns} 
-              data={products} 
-              selectable={true} 
-              selectedRows={selectedProducts} 
-              onSelectionChange={setSelectedProducts} 
+            <Table
+              columns={columns}
+              data={products}
+              selectable={true}
+              selectedRows={selectedProducts}
+              onSelectionChange={setSelectedProducts}
             />
           )}
         </div>
@@ -436,33 +810,35 @@ export default function ProductsPage() {
       {showPrintModal && (
         <Modal title="Configure Barcode Printing" onClose={() => !printing && setShowPrintModal(false)}>
           <div className="p-4 space-y-5">
-            {/* Barcode Size Selector */}
+            {/* Sticker Sheet Format Selector — 2×2 grid */}
             <div>
-              <h4 className="text-sm font-bold text-slate-700 mb-3">Barcode Size</h4>
-              <div className="grid grid-cols-3 gap-3">
+              <h4 className="text-sm font-bold text-slate-700 mb-3">Sticker Sheet Format</h4>
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { key: 'small', label: 'Small', desc: '28 per page', example: 'Rakhi, Jewellery' },
-                  { key: 'medium', label: 'Medium', desc: '21 per page', example: 'Crackers, Boxes' },
-                  { key: 'large', label: 'Large', desc: '14 per page', example: 'Mango Boxes' },
+                  { key: 'l48',  shortLabel: '48L',  size: '48 × 24 mm',  count: '48 labels / page' },
+                  { key: 'l16',  shortLabel: '16L',  size: '99 × 34 mm',  count: '16 labels / page' },
+                  { key: 'l40',  shortLabel: '40P',  size: '18 × 73 mm',  count: '40 labels / page' },
+                  { key: 'l110', shortLabel: '110L', size: '35 × 10 mm',  count: '110 labels / page' },
                 ].map(s => (
                   <button key={s.key} onClick={() => setBarcodeSize(s.key)} disabled={printing}
-                    className={`p-3 rounded-xl border-2 transition-all text-left ${
-                      barcodeSize === s.key
+                    className={`p-3 rounded-xl border-2 transition-all text-left ${barcodeSize === s.key
                         ? 'border-indigo-600 bg-indigo-50 shadow-sm'
                         : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'
-                    }`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className={`w-3 h-3 rounded-full ${
-                        s.key === 'small' ? 'bg-emerald-500' : s.key === 'medium' ? 'bg-amber-500' : 'bg-rose-500'
-                      }`} />
-                      <span className={`font-bold text-sm ${barcodeSize === s.key ? 'text-indigo-700' : 'text-slate-700'}`}>{s.label}</span>
-                    </div>
-                    <p className={`text-xs font-semibold ${barcodeSize === s.key ? 'text-indigo-600' : 'text-slate-500'}`}>{s.desc}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{s.example}</p>
+                      }`}>
+                    <span className={`font-bold text-sm ${barcodeSize === s.key ? 'text-indigo-700' : 'text-slate-700'}`}>{s.shortLabel}</span>
+                    <p className={`text-xs font-semibold mt-0.5 ${barcodeSize === s.key ? 'text-indigo-600' : 'text-slate-500'}`}>{s.size}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{s.count}</p>
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Cut guides checkbox */}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={showCutGuides} onChange={e => setShowCutGuides(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" disabled={printing} />
+              <span className="text-sm text-slate-600">Show cut guides (for plain-paper test)</span>
+            </label>
 
             {/* Product Quantities */}
             <div>
@@ -476,11 +852,11 @@ export default function ProductsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <label className="text-xs font-medium text-slate-500">Qty:</label>
-                      <input 
-                        type="number" 
-                        min="1" 
+                      <input
+                        type="number"
+                        min="1"
                         max="1000"
-                        value={printCounts[product.id] || 1} 
+                        value={printCounts[product.id] || 1}
                         onChange={(e) => setPrintCounts({ ...printCounts, [product.id]: parseInt(e.target.value) || 1 })}
                         className="input-field w-20 text-center font-semibold"
                         disabled={printing}
@@ -490,18 +866,18 @@ export default function ProductsPage() {
                 ))}
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-              <button 
-                type="button" 
-                onClick={() => setShowPrintModal(false)} 
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
                 className="btn-secondary px-4 py-2"
                 disabled={printing}
               >
                 Cancel
               </button>
-              <button 
-                onClick={generatePDF} 
+              <button
+                onClick={generatePDF}
                 disabled={printing}
                 className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
               >
@@ -513,52 +889,37 @@ export default function ProductsPage() {
         </Modal>
       )}
 
-      {/* Hidden container for PDF printing (A4 formatted) */}
-      <div className="absolute top-0 left-[-9999px] opacity-0 pointer-events-none">
-        <div id="print-barcodes-container" className="bg-white" style={{ width: '210mm' }}>
-          {(() => {
-            const sizeConfig = {
-              small:  { cols: 4, rows: 7, perPage: 28, barcodeWidth: 0.9, barcodeHeight: 25, fontSize: 8, padding: '2mm', gap: '2mm' },
-              medium: { cols: 3, rows: 7, perPage: 21, barcodeWidth: 1.2, barcodeHeight: 40, fontSize: 10, padding: '3mm', gap: '4mm' },
-              large:  { cols: 2, rows: 7, perPage: 14, barcodeWidth: 1.8, barcodeHeight: 55, fontSize: 12, padding: '4mm', gap: '5mm' },
-            };
-            const cfg = sizeConfig[barcodeSize] || sizeConfig.medium;
-
-            const printProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
-            const duplicatedProducts = [];
-            printProducts.forEach(p => {
-              const count = printCounts[p.id] || 1;
-              for (let i = 0; i < count; i++) {
-                duplicatedProducts.push({ ...p, _printId: `${p.id}-${i}` });
-              }
-            });
-            
-            const totalPages = Math.ceil(duplicatedProducts.length / cfg.perPage) || 1;
-            return Array.from({ length: totalPages }).map((_, pageIndex) => (
-              <div key={pageIndex}>
-                <div style={{ padding: '6mm 4mm', boxSizing: 'border-box' }}>
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: `repeat(${cfg.cols}, 1fr)`, 
-                    gap: cfg.gap 
-                  }}>
-                    {duplicatedProducts.slice(pageIndex * cfg.perPage, (pageIndex + 1) * cfg.perPage).map(p => (
-                      <div key={p._printId} style={{ 
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
-                        padding: cfg.padding, border: '1px solid #cbd5e1', borderRadius: '4px' 
-                      }}>
-                        <Barcode value={p.barcode} width={cfg.barcodeWidth} height={cfg.barcodeHeight} fontSize={cfg.fontSize} margin={0} />
-                        <span style={{ fontSize: `${cfg.fontSize}px`, fontWeight: 'bold', marginTop: '2px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }} title={p.name}>{p.name}</span>
-                        <span style={{ fontSize: `${cfg.fontSize}px`, color: '#475569', fontWeight: '600' }}>{formatCurrency(p.selling_price)}</span>
-                      </div>
-                    ))}
-                  </div>
+      {/* Hidden container for label rendering */}
+      <div style={{ position: 'fixed', top: 0, left: '-9999px', zIndex: -1 }} ref={pagesContainerRef}>
+        {cfg.layout === 'rotated' ? (
+          /* L40: render each label HORIZONTALLY (73×18mm) as individual divs.
+           * generatePDF captures each, rotates 90°, and composes onto pages. */
+          duplicatedProducts.map(p => renderLabel(p))
+        ) : (
+          /* Other layouts: render as page grids for full-page capture */
+          Array.from({ length: totalPages }).map((_, pageIndex) => {
+            const pageItems = duplicatedProducts.slice(pageIndex * perPage, (pageIndex + 1) * perPage);
+            return (
+              <div key={`page-${pageIndex}`} className="label-page" style={{
+                width: '210mm', height: '297mm', position: 'relative',
+                overflow: 'hidden', boxSizing: 'border-box', backgroundColor: '#fff',
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  left: `${cfg.pageMarginLeft}mm`,
+                  top: `${cfg.pageMarginTop}mm`,
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${cfg.cols}, ${cfg.labelW}mm)`,
+                  gridTemplateRows: `repeat(${cfg.rows}, ${cfg.labelH}mm)`,
+                  columnGap: `${cfg.gapX}mm`,
+                  rowGap: `${cfg.gapY}mm`,
+                }}>
+                  {pageItems.map(p => renderLabel(p))}
                 </div>
-                {pageIndex < totalPages - 1 && <div className="html2pdf__page-break"></div>}
               </div>
-            ));
-          })()}
-        </div>
+            );
+          })
+        )}
       </div>
 
       {/* PDF Upload Modal */}

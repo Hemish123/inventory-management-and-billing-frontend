@@ -36,3 +36,6 @@ export const updateEmployee = (id, data) =>
 
 export const deleteEmployee = (id) =>
   apiCall(() => api.delete(`/auth/employees/${id}/`));
+
+export const getSalesPersons = () =>
+  apiCall(() => api.get('/auth/employees/', { params: { role: 'SALES' } }));

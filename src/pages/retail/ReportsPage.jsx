@@ -8,6 +8,7 @@ import {
   getProfitReport, getStockValuation, exportCSV,
 } from '../../api/reportsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
+import { getSalesPersons } from '../../api/authAPI';
 import {
   BarChart3, TrendingUp, Package, AlertTriangle, Skull, MapPin,
   Truck, Users, DollarSign, Warehouse, Download, Calendar,
@@ -50,6 +51,9 @@ const FETCHERS = {
 
 const EXPORTABLE = ['sales', 'inventory', 'low-stock'];
 
+// Reports that support sales person filtering
+const SALES_FILTERABLE = ['sales', 'employee-sales', 'top-products', 'profit'];
+
 function fmt(n) { return '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 }); }
 
 export default function ReportsPage() {
@@ -57,9 +61,17 @@ export default function ReportsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [branches, setBranches] = useState([]);
-  const [filters, setFilters] = useState({ start_date: monthStart, end_date: today, branch: '' });
-
-  useEffect(() => { getBranchDropdown().then(r => { if (r.data?.data) setBranches(r.data.data); }); }, []);
+  const [salesPersons, setSalesPersons] = useState([]);
+  const [filters, setFilters] = useState({ start_date: monthStart, end_date: today, branch: '', cashier: '' });
+  useEffect(() => {
+    getBranchDropdown().then(r => { if (r.data?.data) setBranches(r.data.data); });
+    getSalesPersons().then(r => {
+      if (r.data?.data) {
+        const persons = Array.isArray(r.data.data) ? r.data.data : r.data.data.results || [];
+        setSalesPersons(persons);
+      }
+    });
+  }, []);
 
   const loadReport = async (reportId) => {
     setActive(reportId);
@@ -71,6 +83,7 @@ export default function ReportsPage() {
     if (filters.start_date) params.start_date = filters.start_date;
     if (filters.end_date) params.end_date = filters.end_date;
     if (filters.branch) params.branch = filters.branch;
+    if (filters.cashier && SALES_FILTERABLE.includes(reportId)) params.cashier = filters.cashier;
     const { data: res, error } = await fetcher(params);
     setLoading(false);
     if (res?.data) setData(res.data);
@@ -83,6 +96,7 @@ export default function ReportsPage() {
       if (filters.start_date) params.start_date = filters.start_date;
       if (filters.end_date) params.end_date = filters.end_date;
       if (filters.branch) params.branch = filters.branch;
+      if (filters.cashier) params.cashier = filters.cashier;
       const res = await exportCSV(active, params);
       const blob = new Blob([res.data], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
@@ -152,12 +166,11 @@ export default function ReportsPage() {
             </div>
           ))}
         </div>
-        {renderTable(data.daily, [
-          { key: 'date', label: 'Date' },
+        {renderTable(data.person_wise || [], [
+          { key: 'employee', label: 'Sales Person' },
           { key: 'revenue', label: 'Revenue', render: v => fmt(v) },
-          { key: 'tax', label: 'Tax', render: v => fmt(v) },
-          { key: 'discount', label: 'Discount', render: v => fmt(v) },
           { key: 'bills', label: 'Bills' },
+          { key: 'avg_bill', label: 'Avg Bill', render: v => fmt(v) },
         ])}
       </div>
     );
@@ -304,12 +317,13 @@ export default function ReportsPage() {
                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
-            {active && (
-              <button onClick={() => loadReport(active)}
-                className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors">
-                Apply Filters
-              </button>
-            )}
+            {/* Sales Person filter removed as requested */}
+            <button onClick={() => {
+              if (active) loadReport(active);
+            }}
+              className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors">
+              Apply Filters
+            </button>
             {active && EXPORTABLE.includes(active) && (
               <button onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors">

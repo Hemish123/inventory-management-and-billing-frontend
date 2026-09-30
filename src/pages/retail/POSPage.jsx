@@ -4,6 +4,7 @@ import Modal from '../../components/common/Modal';
 import { barcodeLookup, getProductDropdown } from '../../api/productsAPI';
 import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill } from '../../api/billingAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
+import { getSalesPersons } from '../../api/authAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import toast from 'react-hot-toast';
 import {
@@ -25,8 +26,10 @@ export default function POSPage() {
   const [showDrafts, setShowDrafts] = useState(false);
   const [draftsList, setDraftsList] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [salesPersonsList, setSalesPersonsList] = useState([]);
   
   const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedSalesPerson, setSelectedSalesPerson] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
@@ -48,6 +51,7 @@ export default function POSPage() {
   useEffect(() => {
     loadBranches();
     loadProducts();
+    loadSalesPersons();
     barcodeRef.current?.focus();
   }, []);
 
@@ -82,6 +86,14 @@ export default function POSPage() {
   const loadProducts = async () => {
     const { data } = await getProductDropdown();
     if (data?.data) setProductList(data.data);
+  };
+
+  const loadSalesPersons = async () => {
+    const { data } = await getSalesPersons();
+    if (data?.data) {
+      const persons = Array.isArray(data.data) ? data.data : data.data.results || [];
+      setSalesPersonsList(persons);
+    }
   };
 
   const loadDrafts = async () => {
@@ -210,6 +222,7 @@ export default function POSPage() {
     setDiscountValue(0);
     setNotes('');
     setActiveDraftId(null);
+    setSelectedSalesPerson('');
     // Aggressive refocus: try immediately + delayed to beat HeadlessUI focus trap
     barcodeRef.current?.focus();
     setTimeout(() => barcodeRef.current?.focus(), 50);
@@ -251,7 +264,7 @@ export default function POSPage() {
   const changeDue = Math.max(0, (parseFloat(amountReceived) || grandTotal) - grandTotal);
 
   const buildPayload = (saveAsHold = false) => {
-    return {
+    const payload = {
       branch_id: selectedBranch,
       customer_name: customerName || 'Walk-in Customer',
       customer_phone: customerPhone,
@@ -265,6 +278,8 @@ export default function POSPage() {
       items: processedCart,
       save_as_hold: saveAsHold,
     };
+    if (selectedSalesPerson) payload.salesperson_id = selectedSalesPerson;
+    return payload;
   };
 
   const handleHoldBill = async () => {
@@ -515,45 +530,59 @@ export default function POSPage() {
         {/* Right: Checkout Panel */}
         <div className="w-96 flex flex-col bg-white border-l border-slate-200 z-30 shadow-2xl relative">
           
-          <div className="p-4 flex-1 flex flex-col justify-between">
-            <div className="space-y-4">
+          {/* Scrollable form area */}
+          <div className="p-3 flex-1 overflow-y-auto space-y-3">
               
               {/* Resumed Draft Badge */}
               {activeDraftId && (
-                <div className="bg-amber-50 text-amber-800 p-2 rounded-lg border border-amber-200 flex items-center gap-2 text-xs font-bold">
-                  <PlayCircle className="w-4 h-4 text-amber-600" /> Resumed Draft Mode
+                <div className="bg-amber-50 text-amber-800 p-1.5 rounded-lg border border-amber-200 flex items-center gap-2 text-xs font-bold">
+                  <PlayCircle className="w-3.5 h-3.5 text-amber-600" /> Resumed Draft
                 </div>
               )}
 
               {/* Customer Info Row */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 text-sm">Customer Details</h3>
+                  <h3 className="font-bold text-slate-800 text-xs">Customer Details</h3>
                   <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="text-[11px] bg-slate-100 text-slate-600 border border-slate-200 rounded px-1.5 py-0.5 outline-none font-bold">
                     {branches.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => setCustomerName(e.target.value)} className="input-field bg-slate-50 py-2 text-xs px-3 shadow-sm border-slate-200 focus:border-indigo-400" />
-                  <input type="text" placeholder="Phone (Optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50 py-2 text-xs px-3 shadow-sm border-slate-200 focus:border-indigo-400" />
+                  <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => setCustomerName(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
+                  <input type="text" placeholder="Phone (Optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
                 </div>
               </div>
 
+              {/* Sales Person Dropdown */}
+              {salesPersonsList.length > 0 && (
+                <div className="space-y-1">
+                  <h3 className="font-bold text-slate-800 text-xs">Sales Person</h3>
+                  <select value={selectedSalesPerson} onChange={e => setSelectedSalesPerson(e.target.value)}
+                    className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full">
+                    <option value="">Self (Default)</option>
+                    {salesPersonsList.map(sp => (
+                      <option key={sp.id} value={sp.id}>{sp.first_name} {sp.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Payment Methods */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 text-sm">Payment Method</h3>
+                  <h3 className="font-bold text-slate-800 text-xs">Payment Method</h3>
                   <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 rounded">F7 - F8</span>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-1.5">
                   {['CASH', 'UPI', 'CARD', 'SPLIT'].map(m => {
                     const Icon = PAYMENT_ICONS[m] || CreditCard;
                     const active = paymentMethod === m;
                     return (
                       <button key={m} onClick={() => setPaymentMethod(m)}
-                        className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 transition-all duration-200 shadow-sm ${active ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700 scale-[1.02]' : 'border-slate-100 bg-white text-slate-500 hover:border-indigo-200 hover:bg-slate-50'}`}>
-                        <Icon className={`w-5 h-5 mb-1 ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
-                        <span className="text-[10px] font-extrabold tracking-wide">{m}</span>
+                        className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl border-2 transition-all duration-200 shadow-sm ${active ? 'border-indigo-600 bg-indigo-50/80 text-indigo-700 scale-[1.02]' : 'border-slate-100 bg-white text-slate-500 hover:border-indigo-200 hover:bg-slate-50'}`}>
+                        <Icon className={`w-4 h-4 mb-0.5 ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <span className="text-[9px] font-extrabold tracking-wide">{m}</span>
                       </button>
                     );
                   })}
@@ -561,53 +590,52 @@ export default function POSPage() {
               </div>
 
               {/* Discount Row */}
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between gap-3 shadow-sm">
+              <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center justify-between gap-2 shadow-sm">
                 <span className="text-xs font-bold text-slate-700 whitespace-nowrap">Discount</span>
-                <div className="flex gap-2 flex-1">
-                  <select value={discountType} onChange={e => {setDiscountType(e.target.value); setDiscountValue(0);}} className="input-field bg-white py-1.5 text-xs px-2 border-slate-200 shadow-sm w-20">
+                <div className="flex gap-1.5 flex-1">
+                  <select value={discountType} onChange={e => {setDiscountType(e.target.value); setDiscountValue(0);}} className="input-field bg-white py-1 text-xs px-2 border-slate-200 shadow-sm w-20">
                     <option value="NONE">None</option>
                     <option value="PERCENTAGE">%</option>
                     <option value="FIXED">₹</option>
                   </select>
-                  <input type="number" disabled={discountType === 'NONE'} value={discountValue} onChange={e => setDiscountValue(parseFloat(e.target.value)||0)} className="input-field bg-white py-1.5 text-xs px-2 border-slate-200 shadow-sm flex-1 font-semibold" placeholder="0" />
+                  <input type="number" disabled={discountType === 'NONE'} value={discountValue} onChange={e => setDiscountValue(parseFloat(e.target.value)||0)} className="input-field bg-white py-1 text-xs px-2 border-slate-200 shadow-sm flex-1 font-semibold" placeholder="0" />
                 </div>
               </div>
 
               {/* Cash Received Row */}
               {paymentMethod === 'CASH' && (
-                <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 flex items-center justify-between gap-3 shadow-sm">
+                <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-sm">
                   <span className="text-xs font-bold text-emerald-800 whitespace-nowrap">Cash Received</span>
-                  <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={grandTotal} className="flex-1 input-field bg-white text-base font-bold font-mono text-emerald-700 border-emerald-300 py-1.5 px-3 focus:border-emerald-500 shadow-sm text-right" />
+                  <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={grandTotal} className="flex-1 input-field bg-white text-sm font-bold font-mono text-emerald-700 border-emerald-300 py-1 px-2.5 focus:border-emerald-500 shadow-sm text-right" />
                 </div>
               )}
-            </div>
           </div>
 
-          {/* Checkout Totals */}
-          <div className="bg-slate-50/50 border-t border-slate-200 p-4 shrink-0">
-            <div className="space-y-1.5 mb-4 text-sm font-medium text-slate-500">
+          {/* Checkout Totals — always pinned at bottom */}
+          <div className="bg-slate-50/50 border-t border-slate-200 p-3 shrink-0">
+            <div className="space-y-1 mb-2 text-sm font-medium text-slate-500">
               <div className="flex justify-between items-center"><span>Subtotal</span><span className="text-slate-800 font-semibold">{formatCurrency(subtotal)}</span></div>
               <div className="flex justify-between items-center"><span>Tax (GST)</span><span className="text-slate-800 font-semibold">{formatCurrency(taxTotal)}</span></div>
               {overallDisc > 0 && <div className="flex justify-between items-center text-rose-500"><span>Discount</span><span className="font-semibold">-{formatCurrency(overallDisc)}</span></div>}
               {roundOff !== 0 && <div className="flex justify-between items-center"><span>Round Off</span><span className="text-slate-800 font-semibold">{roundOff > 0 ? '+' : ''}{roundOff.toFixed(2)}</span></div>}
             </div>
             
-            <div className="flex justify-between items-end mb-4 pt-4 border-t border-slate-200">
-              <span className="text-slate-800 font-extrabold uppercase tracking-wider text-sm">Grand Total</span>
-              <span className="text-4xl font-black text-indigo-600 tracking-tighter">{formatCurrency(grandTotal)}</span>
+            <div className="flex justify-between items-end mb-3 pt-2 border-t border-slate-200">
+              <span className="text-slate-800 font-extrabold uppercase tracking-wider text-xs">Grand Total</span>
+              <span className="text-3xl font-black text-indigo-600 tracking-tighter">{formatCurrency(grandTotal)}</span>
             </div>
 
             {paymentMethod === 'CASH' && changeDue > 0 && (
-              <div className="flex justify-between items-center mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm">
-                <span className="text-emerald-800 font-bold text-sm">Change Due</span>
-                <span className="text-2xl font-black text-emerald-600">{formatCurrency(changeDue)}</span>
+              <div className="flex justify-between items-center mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm">
+                <span className="text-emerald-800 font-bold text-xs">Change Due</span>
+                <span className="text-xl font-black text-emerald-600">{formatCurrency(changeDue)}</span>
               </div>
             )}
 
             <div className="grid grid-cols-3 gap-2">
-              <button onClick={handleHoldBill} disabled={cart.length === 0 || submitting} className="col-span-1 py-3 rounded-xl bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold flex flex-col items-center justify-center gap-1 transition-all disabled:opacity-50 shadow-sm">
-                <PauseCircle className="w-5 h-5 text-slate-400" />
-                <span className="text-[10px] uppercase tracking-wider">Draft (F4)</span>
+              <button onClick={handleHoldBill} disabled={cart.length === 0 || submitting} className="col-span-1 py-2.5 rounded-xl bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold flex flex-col items-center justify-center gap-0.5 transition-all disabled:opacity-50 shadow-sm">
+                <PauseCircle className="w-4 h-4 text-slate-400" />
+                <span className="text-[9px] uppercase tracking-wider">Draft (F4)</span>
               </button>
               <button onClick={handleSubmit} disabled={cart.length === 0 || submitting} className="col-span-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 disabled:opacity-50 disabled:shadow-none">
                 <Printer className="w-5 h-5" />

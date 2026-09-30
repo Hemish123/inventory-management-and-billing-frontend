@@ -43,14 +43,21 @@ export default function Users() {
     setLoading(false);
   };
 
+  const isSalesRole = form.role === 'SALES';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     
     // Auto-generate username from email if empty
     const payload = { ...form };
-    if (!payload.username) payload.username = payload.email;
+    if (!payload.username) payload.username = payload.email || `sales_${Date.now()}`;
     if (!payload.assigned_branch) delete payload.assigned_branch;
+
+    // For SALES role, email is optional
+    if (isSalesRole && !payload.email) {
+      delete payload.email;
+    }
 
     let data, error;
     if (editId) {
@@ -61,7 +68,7 @@ export default function Users() {
     setSubmitting(false);
     
     if (data) {
-      toast.success(editId ? 'User updated successfully' : 'User created successfully. A generated password has been sent to their email.');
+      toast.success(editId ? 'User updated successfully' : (isSalesRole ? 'Sales person created successfully.' : 'User created successfully. A generated password has been sent to their email.'));
       handleCloseModal();
       loadData();
     } else {
@@ -172,9 +179,17 @@ export default function Users() {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-medium text-slate-500">Email *</label>
-                <input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                  className="input-field mt-1" disabled={!!editId} />
+                <label className="text-xs font-medium text-slate-500">
+                  Email {isSalesRole ? '(Optional)' : '*'}
+                </label>
+                <input 
+                  required={!isSalesRole}
+                  type={isSalesRole && !form.email ? 'text' : 'email'}
+                  value={form.email} 
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                  className="input-field mt-1" 
+                  disabled={!!editId}
+                  placeholder={isSalesRole ? 'Not required for sales' : ''} />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500">Phone</label>
@@ -189,6 +204,7 @@ export default function Users() {
                 <select required value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
                   className="input-field mt-1">
                   <option value="EMPLOYEE">Employee</option>
+                  <option value="SALES">Sales</option>
                   <option value="ADMIN">Admin</option>
                 </select>
               </div>
@@ -211,7 +227,13 @@ export default function Users() {
               </div>
             )}
 
-            {!editId && (
+            {!editId && isSalesRole && (
+              <div className="bg-blue-50 text-blue-700 text-xs p-3 rounded-lg border border-blue-100 mt-2">
+                <strong>Note:</strong> Sales persons don't need an email address. They will be available in the sales person dropdown for billing and reports.
+              </div>
+            )}
+
+            {!editId && !isSalesRole && (
               <div className="bg-amber-50 text-amber-700 text-xs p-3 rounded-lg border border-amber-100 mt-2">
                 <strong>Note:</strong> A generated password will be sent to the user's email address. They will be required to change it upon first login.
               </div>
