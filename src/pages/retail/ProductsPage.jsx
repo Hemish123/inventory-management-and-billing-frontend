@@ -7,6 +7,7 @@ import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, createCategory, getBrands, createBrand, getProductStock, uploadProductsPDF } from '../../api/productsAPI';
 import { getSuppliers, createSupplier } from '../../api/productsAPI';
+import { getBranchDropdown } from '../../api/coreAPI';
 import { formatCurrency } from '../../utils/formatters';
 import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer, Upload, FileUp, X, Check, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -98,6 +99,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [branches, setBranches] = useState([]);
 
   // Selection and Printing State
   const [selectedProducts, setSelectedProducts] = useState([]);
@@ -119,7 +121,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState({
     name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
     unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18,
-    minimum_stock_level: 10, reorder_level: 20,
+    minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: '',
   });
   const [stockModal, setStockModal] = useState({ isOpen: false, product: null, stocks: [], loading: false });
 
@@ -133,10 +135,16 @@ export default function ProductsPage() {
   };
 
   const loadDropdowns = async () => {
-    const [c, b, s] = await Promise.all([getCategories(), getBrands(), getSuppliers()]);
+    const [c, b, s, br] = await Promise.all([getCategories(), getBrands(), getSuppliers(), getBranchDropdown()]);
     if (c.data?.data) setCategories(c.data.data);
     if (b.data?.data) setBrands(b.data.data);
     if (s.data?.data) setSuppliers(Array.isArray(s.data.data) ? s.data.data : s.data.data.results || []);
+    if (br.data?.data) {
+      setBranches(br.data.data);
+      if (br.data.data.length > 0) {
+        setForm(prev => ({ ...prev, initial_stock_branch: br.data.data[0].id }));
+      }
+    }
   };
 
   useEffect(() => { loadProducts(); }, [search]);
@@ -169,6 +177,17 @@ export default function ProductsPage() {
     if (!payload.barcode) delete payload.barcode;
     delete payload.supplier_name;
 
+    // Remove initial_stock and initial_stock_branch for edit requests (stock is managed separately)
+    if (editingId) {
+      delete payload.initial_stock;
+      delete payload.initial_stock_branch;
+    }
+    // Remove empty initial_stock to avoid sending 0 unnecessarily
+    if (!payload.initial_stock) {
+      delete payload.initial_stock;
+      delete payload.initial_stock_branch;
+    }
+
     const { data, error } = editingId
       ? await updateProduct(editingId, payload)
       : await createProduct(payload);
@@ -179,7 +198,7 @@ export default function ProductsPage() {
       setEditingId(null);
       setForm({
         name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
-        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20
+        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: branches[0]?.id || ''
       });
       loadProducts();
     } else toast.error(error || 'Failed');
@@ -654,7 +673,7 @@ export default function ProductsPage() {
 
       {/* Add/Edit Product Modal */}
       {showModal && (
-        <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 }); }}>
+        <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }}>
           <form onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -740,9 +759,40 @@ export default function ProductsPage() {
                   onChange={e => setForm({ ...form, reorder_level: parseInt(e.target.value) || 0 })}
                   className="input-field mt-1" />
               </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Dead Stock Days</label>
+                <input type="number" value={form.dead_stock_days}
+                  onChange={e => setForm({ ...form, dead_stock_days: parseInt(e.target.value) || 90 })}
+                  placeholder="90"
+                  className="input-field mt-1" />
+                <p className="text-[10px] text-slate-400 mt-0.5">No sale in these days = dead stock</p>
+              </div>
+              {!editingId && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500">Initial Stock (Opening)</label>
+                    <input type="number" min="0" value={form.initial_stock}
+                      onChange={e => setForm({ ...form, initial_stock: e.target.value })}
+                      placeholder="0"
+                      className="input-field mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500">Stock Branch</label>
+                    <select 
+                      value={form.initial_stock_branch} 
+                      onChange={e => setForm({ ...form, initial_stock_branch: e.target.value })} 
+                      className="input-field mt-1"
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 }); }} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }} className="btn-secondary px-4 py-2">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors">
                 {editingId ? "Save Changes" : "Create Product"}
               </button>
