@@ -5,7 +5,7 @@ import Table from '../../components/common/Table';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { getBills, voidBill } from '../../api/billingAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { Search, XCircle, FileText, PlayCircle } from 'lucide-react';
+import { Search, XCircle, FileText, PlayCircle, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function BillsPage() {
@@ -62,6 +62,12 @@ export default function BillsPage() {
           <button onClick={() => navigate(`/pos?draftId=${row.id}`)}
             className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors" title="Resume Bill">
             <PlayCircle className="w-5 h-5" />
+          </button>
+        )}
+        {row.status === 'COMPLETED' && (
+          <button onClick={() => navigate(`/pos?editBillId=${row.id}`)}
+            className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors" title="Edit Bill (Partial Return)">
+            <Pencil className="w-5 h-5" />
           </button>
         )}
         {row.status !== 'VOID' && (

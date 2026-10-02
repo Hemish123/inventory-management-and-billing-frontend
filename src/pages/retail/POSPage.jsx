@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import Navbar from '../../components/common/Navbar';
 import Modal from '../../components/common/Modal';
 import { barcodeLookup, getProductDropdown } from '../../api/productsAPI';
-import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill } from '../../api/billingAPI';
+import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill, getBill, updateBill } from '../../api/billingAPI';
 import { getCustomerDropdown, createCustomer } from '../../api/customerAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { getSalesPersons } from '../../api/authAPI';
@@ -49,6 +49,7 @@ export default function POSPage() {
   const [submitting, setSubmitting] = useState(false);
   const [lastBill, setLastBill] = useState(null);
   const [activeDraftId, setActiveDraftId] = useState(null);
+  const [activeEditId, setActiveEditId] = useState(null);
   
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
@@ -168,9 +169,13 @@ export default function POSPage() {
     // Check URL for draftId to auto-resume
     const params = new URLSearchParams(window.location.search);
     const draftId = params.get('draftId');
+    const editBillId = params.get('editBillId');
     if (draftId && !activeDraftId) {
       handleResumeDraft(draftId);
       // Clean up URL without refreshing
+      window.history.replaceState({}, '', '/pos');
+    } else if (editBillId && !activeEditId) {
+      handleEditBill(editBillId);
       window.history.replaceState({}, '', '/pos');
     }
   }, []); // Run once on mount
@@ -278,10 +283,10 @@ export default function POSPage() {
     setCustomerPhone('');
     setSelectedCustomerId(null);
     setAmountReceived('');
-    setDiscountType('NONE');
     setDiscountValue(0);
     setNotes('');
     setActiveDraftId(null);
+    setActiveEditId(null);
     setSelectedSalesPerson('');
     // Aggressive refocus: try immediately + delayed to beat HeadlessUI focus trap
     barcodeRef.current?.focus();
@@ -412,6 +417,35 @@ export default function POSPage() {
     }
   };
 
+  const handleEditBill = async (editId) => {
+    const { data } = await getBill(editId);
+    if (data?.data) {
+      const bill = data.data;
+      setCart(bill.items.map(i => ({
+        product: typeof i.product === 'string' ? parseInt(i.product, 10) : i.product,
+        product_name: i.product_name || '',
+        barcode: i.barcode || '',
+        hsn_code: i.hsn_code || '',
+        unit_price: parseFloat(i.unit_price) || 0,
+        tax_percentage: parseFloat(i.tax_percentage) || 0,
+        quantity: parseFloat(i.quantity) || 1,
+        discount_type: i.discount_type || 'NONE',
+        discount_percentage: parseFloat(i.discount_percentage || 0),
+        discount_amount: parseFloat(i.discount_amount || 0),
+      })));
+      setCustomerName(bill.customer_name === 'Walk-in Customer' ? '' : bill.customer_name);
+      setCustomerPhone(bill.customer_phone);
+      setDiscountType(bill.discount_type || 'NONE');
+      setDiscountValue(bill.discount_type === 'PERCENTAGE' ? parseFloat(bill.discount_percentage) : parseFloat(bill.discount_amount));
+      setNotes(bill.notes);
+      setActiveEditId(bill.id);
+      if (bill.branch) setSelectedBranch(bill.branch);
+      toast.success(`Editing bill ${bill.bill_number}`);
+      
+      barcodeRef.current?.focus();
+    }
+  };
+
   const handleDiscardDraft = async (draftId) => {
     if (!window.confirm('Delete this draft?')) return;
     const { error } = await discardDraft(draftId);
@@ -441,7 +475,9 @@ export default function POSPage() {
     payload.send_whatsapp = receiptType === 'WHATSAPP';
 
     let res;
-    if (activeDraftId) {
+    if (activeEditId) {
+      res = await updateBill(activeEditId, payload);
+    } else if (activeDraftId) {
       await discardDraft(activeDraftId);
       res = await createBill(payload);
     } else {
