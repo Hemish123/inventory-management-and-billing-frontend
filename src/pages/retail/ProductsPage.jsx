@@ -43,10 +43,10 @@ const STICKER_CONFIGS = {
     pageMarginTop: 2.52,   // (297 - 8*34 - 7*1.28) / 2
     pageMarginLeft: 4,     // (210 - 2*99 - 1*2) / 2 = 5 → use 4 for safety
     padTop: 1.5, padBottom: 1.5, padLeft: 2, padRight: 2,
-    leftColW: 50, rightColW: 43,
+    leftColW: 48, rightColW: 45,
     barcodeW: 46, barcodeH: 14,
     digitsFont: 7, digitsBoxH: 4,
-    companyFont: 7, companyBoxH: 5,
+    companyFont: 5.5, companyBoxH: 5,
     nameFont: 8, nameBoxH: 9, // 2 lines
     priceFont: 14, priceBoxH: 8,
     showCompany: true, showName: true, showPrice: true,
@@ -495,42 +495,46 @@ export default function ProductsPage() {
       width: `${cfg.labelW}mm`, height: `${cfg.labelH}mm`, boxSizing: 'border-box',
       border, overflow: 'hidden', backgroundColor: '#fff',
       padding: `${cfg.padTop}mm ${cfg.padRight}mm ${cfg.padBottom}mm ${cfg.padLeft}mm`,
-      display: 'flex', alignItems: 'center', gap: '2mm',
+      display: 'flex', flexDirection: 'column',
     }}>
-      {/* LEFT column: barcode + digits */}
-      <div style={{ width: `${cfg.leftColW}mm`, flexShrink: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
-        <div style={{ width: '100%', minHeight: `${cfg.digitsBoxH}mm`, fontSize: `${cfg.digitsFont}pt`,
-          color: '#000', fontFamily: ff, lineHeight: `${cfg.digitsBoxH}mm`, textAlign: 'center',
-          flexShrink: 0,
-        }}>{p.barcode}</div>
-      </div>
-      {/* RIGHT column: company, name, price */}
-      <div style={{ width: `${cfg.rightColW}mm`, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
-        justifyContent: 'center', gap: '0.5mm',
-      }}>
-        {cfg.showCompany && companyName && (
-          <div style={{ minHeight: `${cfg.companyBoxH}mm`, maxHeight: `${cfg.companyBoxH}mm`, fontSize: `${cfg.companyFont}pt`,
-            fontWeight: 'bold', textTransform: 'uppercase', color: '#000', fontFamily: ff,
-            lineHeight: `${cfg.companyBoxH}mm`, overflow: 'visible', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      {/* TOP ROW: company name — full width */}
+      {cfg.showCompany && companyName && (
+        <div style={{ width: '100%', minHeight: `${cfg.companyBoxH}mm`, maxHeight: `${cfg.companyBoxH}mm`,
+          fontSize: `${cfg.companyFont}pt`, fontWeight: 'bold', textTransform: 'uppercase', color: '#000',
+          fontFamily: ff, lineHeight: `${cfg.companyBoxH}mm`, overflow: 'hidden', textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap', flexShrink: 0, textAlign: 'left',
+        }}>{companyName}</div>
+      )}
+      {/* BOTTOM SECTION: barcode+digits left, name+price right */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '2mm', minHeight: 0 }}>
+        {/* LEFT column: barcode + digits */}
+        <div style={{ width: `${cfg.leftColW}mm`, flexShrink: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
+          <div style={{ width: '100%', minHeight: `${cfg.digitsBoxH}mm`, fontSize: `${cfg.digitsFont}pt`,
+            color: '#000', fontFamily: ff, lineHeight: `${cfg.digitsBoxH}mm`, textAlign: 'center',
             flexShrink: 0,
-          }}>{companyName}</div>
-        )}
-        {cfg.showName && (
-          <div style={{ minHeight: `${cfg.nameBoxH}mm`, maxHeight: `${cfg.nameBoxH}mm`, fontSize: `${cfg.nameFont}pt`,
-            fontWeight: 'bold', color: '#000', fontFamily: ff, lineHeight: 1.3,
-            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-            flexShrink: 0,
-          }} title={p.name}>{p.name}</div>
-        )}
-        {cfg.showPrice && (
-          <div style={{ minHeight: `${cfg.priceBoxH}mm`, fontSize: `${cfg.priceFont}pt`,
-            fontWeight: 900, color: '#000', fontFamily: ff, lineHeight: `${cfg.priceBoxH}mm`,
-            display: 'flex', alignItems: 'center', flexShrink: 0,
-          }}>{formatCurrency(p.selling_price)}</div>
-        )}
+          }}>{p.barcode}</div>
+        </div>
+        {/* RIGHT column: name, price */}
+        <div style={{ width: `${cfg.rightColW}mm`, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
+          justifyContent: 'center', gap: '0.5mm',
+        }}>
+          {cfg.showName && (
+            <div style={{ minHeight: `${cfg.nameBoxH}mm`, maxHeight: `${cfg.nameBoxH}mm`, fontSize: `${cfg.nameFont}pt`,
+              fontWeight: 'bold', color: '#000', fontFamily: ff, lineHeight: 1.3,
+              overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              flexShrink: 0,
+            }} title={p.name}>{p.name}</div>
+          )}
+          {cfg.showPrice && (
+            <div style={{ minHeight: `${cfg.priceBoxH}mm`, fontSize: `${cfg.priceFont}pt`,
+              fontWeight: 900, color: '#000', fontFamily: ff, lineHeight: `${cfg.priceBoxH}mm`,
+              display: 'flex', alignItems: 'center', flexShrink: 0,
+            }}>{formatCurrency(p.selling_price)}</div>
+          )}
+        </div>
       </div>
     </div>
   );
