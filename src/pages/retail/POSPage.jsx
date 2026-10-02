@@ -562,7 +562,7 @@ export default function POSPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => setCustomerName(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
-                  <input type="text" placeholder="Phone (Optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
+                  <input type="text" placeholder="Phone " value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
                 </div>
               </div>
 
@@ -720,7 +720,7 @@ export default function POSPage() {
       {showPaymentOptions && (
         <Modal title="Choose Receipt Type" onClose={() => setShowPaymentOptions(false)} size="md">
           <div className="p-6">
-            <p className="text-slate-600 mb-6 text-center font-medium">How would you like to send the receipt to the customer?</p>
+            <p className="text-slate-600 mb-6 text-center font-medium">How would you like to send the receipt ?</p>
             <div className="grid grid-cols-2 gap-4">
               <button 
                 onClick={() => handleProcessPayment('PDF')}
