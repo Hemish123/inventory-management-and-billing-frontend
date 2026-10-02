@@ -687,11 +687,21 @@ export default function POSPage() {
 
               {/* Cash Received Row */}
               {paymentMethod === 'CASH' && (
-                <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-sm">
+                <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-sm shrink-0">
                   <span className="text-xs font-bold text-emerald-800 whitespace-nowrap">Cash Received</span>
                   <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={grandTotal} className="flex-1 input-field bg-white text-sm font-bold font-mono text-emerald-700 border-emerald-300 py-1 px-2.5 focus:border-emerald-500 shadow-sm text-right" />
                 </div>
               )}
+
+              {/* Bill Notes (Fills empty space) */}
+              <div className="flex-1 min-h-[70px] pt-1">
+                <textarea 
+                  value={notes} 
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Add bill notes or remarks here..."
+                  className="w-full h-full bg-slate-50 border border-slate-200 focus:border-indigo-400 rounded-xl p-2.5 text-xs text-slate-700 resize-none shadow-sm placeholder-slate-400 outline-none transition-colors"
+                />
+              </div>
           </div>
 
           {/* Checkout Totals — always pinned at bottom */}
