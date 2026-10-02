@@ -3,6 +3,7 @@ import Navbar from '../../components/common/Navbar';
 import Modal from '../../components/common/Modal';
 import { barcodeLookup, getProductDropdown } from '../../api/productsAPI';
 import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill } from '../../api/billingAPI';
+import { getCustomerDropdown, createCustomer } from '../../api/customerAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { getSalesPersons } from '../../api/authAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
@@ -10,7 +11,7 @@ import toast from 'react-hot-toast';
 import {
   ScanLine, Plus, Minus, Trash2, ShoppingCart, CreditCard,
   Banknote, Smartphone, X, Printer, Search, PauseCircle, PlayCircle,
-  Keyboard, HelpCircle, FileText
+  Keyboard, HelpCircle, FileText, UserPlus, ChevronDown
 } from 'lucide-react';
 
 const PAYMENT_ICONS = {
@@ -32,6 +33,13 @@ export default function POSPage() {
   const [selectedSalesPerson, setSelectedSalesPerson] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [customersList, setCustomersList] = useState([]);
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [addingCustomer, setAddingCustomer] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [amountReceived, setAmountReceived] = useState('');
   const [discountType, setDiscountType] = useState('NONE');
@@ -52,6 +60,7 @@ export default function POSPage() {
     loadBranches();
     loadProducts();
     loadSalesPersons();
+    loadCustomers();
     barcodeRef.current?.focus();
   }, []);
 
@@ -93,6 +102,55 @@ export default function POSPage() {
     if (data?.data) {
       const persons = Array.isArray(data.data) ? data.data : data.data.results || [];
       setSalesPersonsList(persons);
+    }
+  };
+
+  const loadCustomers = async () => {
+    const { data } = await getCustomerDropdown();
+    if (data?.data) setCustomersList(data.data);
+  };
+
+  const handleSelectCustomer = (customerId) => {
+    if (!customerId) {
+      setSelectedCustomerId(null);
+      setCustomerName('');
+      setCustomerPhone('');
+      return;
+    }
+    const customer = customersList.find(c => c.id === parseInt(customerId));
+    if (customer) {
+      setSelectedCustomerId(customer.id);
+      setCustomerName(customer.name);
+      setCustomerPhone(customer.phone || '');
+    }
+  };
+
+  const handleAddCustomerFromPOS = async () => {
+    if (!newCustomerName.trim()) {
+      toast.error('Customer name is required');
+      return;
+    }
+    setAddingCustomer(true);
+    const payload = {
+      name: newCustomerName.trim(),
+      phone: newCustomerPhone.trim(),
+      email: newCustomerEmail.trim(),
+    };
+    const { data, error } = await createCustomer(payload);
+    setAddingCustomer(false);
+    if (data?.data) {
+      toast.success(`Customer "${newCustomerName}" added!`);
+      const newCust = data.data;
+      setCustomersList(prev => [...prev, { id: newCust.id, name: newCust.name, phone: newCust.phone || '', email: newCust.email || '', gstin: newCust.gstin || '', address: newCust.address || '' }]);
+      setSelectedCustomerId(newCust.id);
+      setCustomerName(newCust.name);
+      setCustomerPhone(newCust.phone || '');
+      setShowAddCustomer(false);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerEmail('');
+    } else {
+      toast.error(error || 'Failed to add customer');
     }
   };
 
@@ -217,6 +275,7 @@ export default function POSPage() {
     setCart([]);
     setCustomerName('');
     setCustomerPhone('');
+    setSelectedCustomerId(null);
     setAmountReceived('');
     setDiscountType('NONE');
     setDiscountValue(0);
@@ -278,6 +337,7 @@ export default function POSPage() {
       items: processedCart,
       save_as_hold: saveAsHold,
     };
+    if (selectedCustomerId) payload.customer_id = selectedCustomerId;
     if (selectedSalesPerson) payload.salesperson_id = selectedSalesPerson;
     return payload;
   };
@@ -548,10 +608,27 @@ export default function POSPage() {
                     {branches.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => setCustomerName(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
-                  <input type="text" placeholder="Phone (Optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
+                {/* Customer Dropdown */}
+                <div className="relative">
+                  <select value={selectedCustomerId || ''}
+                    onChange={e => handleSelectCustomer(e.target.value)}
+                    className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full appearance-none pr-8">
+                    <option value="">Walk-in Customer</option>
+                    {customersList.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ''}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => { setCustomerName(e.target.value); if (selectedCustomerId) setSelectedCustomerId(null); }} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
+                  <input type="text" placeholder="Phone (Optional)" value={customerPhone} onChange={e => { setCustomerPhone(e.target.value); if (selectedCustomerId) setSelectedCustomerId(null); }} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
+                </div>
+                {/* Add New Customer Button */}
+                <button onClick={() => setShowAddCustomer(true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100">
+                  <UserPlus className="w-3.5 h-3.5" /> Add New Customer
+                </button>
               </div>
 
               {/* Sales Person Dropdown */}
@@ -699,6 +776,40 @@ export default function POSPage() {
             </div>
             <div className="mt-6 text-center">
               <button onClick={() => setShowShortcuts(false)} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold">Got it</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add Customer from POS Modal */}
+      {showAddCustomer && (
+        <Modal title="Add New Customer" onClose={() => { setShowAddCustomer(false); setNewCustomerName(''); setNewCustomerPhone(''); setNewCustomerEmail(''); }}>
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1 block">Name *</label>
+              <input type="text" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)}
+                placeholder="Customer name" className="input-field" autoFocus />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1 block">Phone</label>
+              <input type="text" value={newCustomerPhone} onChange={e => setNewCustomerPhone(e.target.value)}
+                placeholder="Phone number" className="input-field" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1 block">Email</label>
+              <input type="email" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)}
+                placeholder="Email (optional)" className="input-field" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => { setShowAddCustomer(false); setNewCustomerName(''); setNewCustomerPhone(''); setNewCustomerEmail(''); }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleAddCustomerFromPOS} disabled={addingCustomer || !newCustomerName.trim()}
+                className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-indigo-500/20">
+                <UserPlus className="w-4 h-4" />
+                {addingCustomer ? 'Adding...' : 'Add Customer'}
+              </button>
             </div>
           </div>
         </Modal>

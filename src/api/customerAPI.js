@@ -17,3 +17,6 @@ export const deleteCustomer = (id) =>
 
 export const getCustomerDropdown = () =>
   apiCall(() => api.get('/customers/dropdown/'));
+
+export const getCustomerByPhone = (phone) =>
+  apiCall(() => api.get('/customers/', { params: { search: phone } }));

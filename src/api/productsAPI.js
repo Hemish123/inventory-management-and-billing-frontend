@@ -64,3 +64,8 @@ export const uploadProductsPDF = (file) => {
     timeout: 120000, // 2 min timeout for AI processing
   }));
 };
+
+// ── Dead Stock ──
+export const getDeadStock = () =>
+  apiCall(() => api.get('/products/dead-stock/'));
+

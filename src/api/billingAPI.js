@@ -13,6 +13,9 @@ export const createBill = (data) =>
 export const voidBill = (id) =>
   apiCall(() => api.post(`/billing/${id}/void/`));
 
+export const updateBill = (id, data) =>
+  apiCall(() => api.post(`/billing/${id}/update-bill/`, data));
+
 // ── Draft / Hold ──
 export const getDrafts = (params = {}) =>
   apiCall(() => api.get('/billing/drafts/', { params }));

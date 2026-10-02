@@ -119,7 +119,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState({
     name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
     unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18,
-    minimum_stock_level: 10, reorder_level: 20,
+    minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '',
   });
   const [stockModal, setStockModal] = useState({ isOpen: false, product: null, stocks: [], loading: false });
 
@@ -169,6 +169,11 @@ export default function ProductsPage() {
     if (!payload.barcode) delete payload.barcode;
     delete payload.supplier_name;
 
+    // Remove initial_stock for edit requests (stock is managed separately)
+    if (editingId) delete payload.initial_stock;
+    // Remove empty initial_stock to avoid sending 0 unnecessarily
+    if (!payload.initial_stock) delete payload.initial_stock;
+
     const { data, error } = editingId
       ? await updateProduct(editingId, payload)
       : await createProduct(payload);
@@ -179,7 +184,7 @@ export default function ProductsPage() {
       setEditingId(null);
       setForm({
         name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
-        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20
+        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: ''
       });
       loadProducts();
     } else toast.error(error || 'Failed');
@@ -201,7 +206,8 @@ export default function ProductsPage() {
       hsn_code: product.hsn_code || '',
       tax_percentage: product.tax_percentage || 18,
       minimum_stock_level: product.minimum_stock_level || 10,
-      reorder_level: product.reorder_level || 20
+      reorder_level: product.reorder_level || 20,
+      dead_stock_days: product.dead_stock_days || 90,
     });
     setShowModal(true);
   };
@@ -654,7 +660,7 @@ export default function ProductsPage() {
 
       {/* Add/Edit Product Modal */}
       {showModal && (
-        <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 }); }}>
+        <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '' }); }}>
           <form onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -740,9 +746,27 @@ export default function ProductsPage() {
                   onChange={e => setForm({ ...form, reorder_level: parseInt(e.target.value) || 0 })}
                   className="input-field mt-1" />
               </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Dead Stock Days</label>
+                <input type="number" value={form.dead_stock_days}
+                  onChange={e => setForm({ ...form, dead_stock_days: parseInt(e.target.value) || 90 })}
+                  placeholder="90"
+                  className="input-field mt-1" />
+                <p className="text-[10px] text-slate-400 mt-0.5">No sale in these days = dead stock</p>
+              </div>
+              {!editingId && (
+                <div>
+                  <label className="text-xs font-medium text-slate-500">Initial Stock (Opening)</label>
+                  <input type="number" min="0" value={form.initial_stock}
+                    onChange={e => setForm({ ...form, initial_stock: e.target.value })}
+                    placeholder="0"
+                    className="input-field mt-1" />
+                  <p className="text-[10px] text-slate-400 mt-0.5">Set opening stock count</p>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20 }); }} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '' }); }} className="btn-secondary px-4 py-2">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors">
                 {editingId ? "Save Changes" : "Create Product"}
               </button>
