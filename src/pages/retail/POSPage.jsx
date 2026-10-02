@@ -110,18 +110,18 @@ export default function POSPage() {
     if (data?.data) setCustomersList(data.data);
   };
 
-  const handleSelectCustomer = (customerId) => {
-    if (!customerId) {
+  const handleCustomerInputChange = (e) => {
+    const val = e.target.value;
+    const matched = customersList.find(c => `${c.name}${c.phone ? ` - ${c.phone}` : ''}` === val);
+    
+    if (matched) {
+      setSelectedCustomerId(matched.id);
+      setCustomerName(matched.name);
+      setCustomerPhone(matched.phone || '');
+    } else {
       setSelectedCustomerId(null);
-      setCustomerName('');
+      setCustomerName(val);
       setCustomerPhone('');
-      return;
-    }
-    const customer = customersList.find(c => c.id === parseInt(customerId));
-    if (customer) {
-      setSelectedCustomerId(customer.id);
-      setCustomerName(customer.name);
-      setCustomerPhone(customer.phone || '');
     }
   };
 
@@ -608,27 +608,21 @@ export default function POSPage() {
                     {branches.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
                   </select>
                 </div>
-                {/* Customer Dropdown */}
                 <div className="relative">
-                  <select value={selectedCustomerId || ''}
-                    onChange={e => handleSelectCustomer(e.target.value)}
-                    className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full appearance-none pr-8">
-                    <option value="">Walk-in Customer</option>
+                  <input 
+                    list="customers-list"
+                    type="text" 
+                    placeholder="Search customer or type new name..." 
+                    value={customerName} 
+                    onChange={handleCustomerInputChange} 
+                    className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full" 
+                  />
+                  <datalist id="customers-list">
                     {customersList.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ''}</option>
+                      <option key={c.id} value={`${c.name}${c.phone ? ` - ${c.phone}` : ''}`} />
                     ))}
-                  </select>
-                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                  </datalist>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => { setCustomerName(e.target.value); if (selectedCustomerId) setSelectedCustomerId(null); }} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
-                  <input type="text" placeholder="Phone (Optional)" value={customerPhone} onChange={e => { setCustomerPhone(e.target.value); if (selectedCustomerId) setSelectedCustomerId(null); }} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
-                </div>
-                {/* Add New Customer Button */}
-                <button onClick={() => setShowAddCustomer(true)}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100">
-                  <UserPlus className="w-3.5 h-3.5" /> Add New Customer
-                </button>
               </div>
 
               {/* Sales Person Dropdown */}
