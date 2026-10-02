@@ -78,7 +78,7 @@ export default function Customers() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input type="text" value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search customers..."
+              placeholder="Search by name, phone, or email..."
               className="input-field pl-10" />
           </div>
           <button onClick={() => navigate('/customers/add')} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
