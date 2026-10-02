@@ -43,6 +43,7 @@ export default function POSPage() {
   const [activeDraftId, setActiveDraftId] = useState(null);
   
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   
   const barcodeRef = useRef(null);
   const searchRef = useRef(null);
@@ -361,12 +362,23 @@ export default function POSPage() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleTriggerPayment = () => {
     if (!selectedBranch) return toast.error('Select a branch');
     if (cart.length === 0) return toast.error('Add items to cart');
+    setShowPaymentOptions(true);
+  };
+  submitBillRef.current = handleTriggerPayment;
 
+  const handleProcessPayment = async (receiptType) => {
+    if (receiptType === 'WHATSAPP' && !customerPhone) {
+      toast.error('Customer phone number is required for WhatsApp bill');
+      return;
+    }
+    
+    setShowPaymentOptions(false);
     setSubmitting(true);
     const payload = buildPayload(false);
+    payload.send_whatsapp = receiptType === 'WHATSAPP';
 
     let res;
     if (activeDraftId) {
@@ -382,16 +394,17 @@ export default function POSPage() {
       toast.success(`Bill ${res.data.data.bill_number} completed!`);
       setLastBill(res.data.data);
       
-      // Open receipt PDF in new tab
-      const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
-      const printWindow = window.open(printUrl, '_blank');
-      if(printWindow) {
-        printWindow.onload = () => printWindow.print();
+      if (receiptType === 'PDF') {
+        const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
+        const printWindow = window.open(printUrl, '_blank');
+        if(printWindow) {
+          printWindow.onload = () => printWindow.print();
+        }
+      } else if (receiptType === 'WHATSAPP') {
+        toast.success('WhatsApp receipt sending triggered!');
       }
 
-      // Reset form AFTER window.open, then aggressively recapture focus
       resetForm();
-      // Re-focus after the new tab steals focus
       setTimeout(() => barcodeRef.current?.focus(), 500);
       setTimeout(() => barcodeRef.current?.focus(), 1000);
       setTimeout(() => barcodeRef.current?.focus(), 2000);
@@ -399,7 +412,6 @@ export default function POSPage() {
       toast.error(res.error || 'Failed to complete sale');
     }
   };
-  submitBillRef.current = handleSubmit;
 
   const filteredProducts = productList.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -637,7 +649,7 @@ export default function POSPage() {
                 <PauseCircle className="w-4 h-4 text-slate-400" />
                 <span className="text-[9px] uppercase tracking-wider">Draft (F4)</span>
               </button>
-              <button onClick={handleSubmit} disabled={cart.length === 0 || submitting} className="col-span-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 disabled:opacity-50 disabled:shadow-none">
+              <button onClick={handleTriggerPayment} disabled={cart.length === 0 || submitting} className="col-span-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 disabled:opacity-50 disabled:shadow-none">
                 <Printer className="w-5 h-5" />
                 {submitting ? 'PROCESSING' : 'PAY (F9)'}
               </button>
@@ -699,6 +711,49 @@ export default function POSPage() {
             </div>
             <div className="mt-6 text-center">
               <button onClick={() => setShowShortcuts(false)} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold">Got it</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Payment Options Modal */}
+      {showPaymentOptions && (
+        <Modal title="Choose Receipt Type" onClose={() => setShowPaymentOptions(false)} size="md">
+          <div className="p-6">
+            <p className="text-slate-600 mb-6 text-center font-medium">How would you like to send the receipt to the customer?</p>
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => handleProcessPayment('PDF')}
+                className="flex flex-col items-center justify-center p-6 border-2 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 rounded-2xl transition-all group"
+              >
+                <div className="w-16 h-16 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-4 transition-colors">
+                  <Printer className="w-8 h-8 text-slate-500 group-hover:text-indigo-600" />
+                </div>
+                <span className="font-bold text-slate-700 group-hover:text-indigo-700">Print PDF</span>
+              </button>
+              
+              <button 
+                onClick={() => handleProcessPayment('WHATSAPP')}
+                className="flex flex-col items-center justify-center p-6 border-2 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-2xl transition-all group"
+              >
+                <div className="w-16 h-16 rounded-full bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center mb-4 transition-colors">
+                  <Smartphone className="w-8 h-8 text-slate-500 group-hover:text-emerald-600" />
+                </div>
+                <span className="font-bold text-slate-700 group-hover:text-emerald-700">WhatsApp Bill</span>
+              </button>
+            </div>
+            {!customerPhone && (
+              <div className="mt-4 p-3 bg-amber-50 text-amber-700 text-sm rounded-lg flex items-center justify-center border border-amber-200">
+                <span>Please note: WhatsApp bill requires a customer phone number.</span>
+              </div>
+            )}
+            <div className="mt-6 flex justify-center">
+              <button 
+                onClick={() => setShowPaymentOptions(false)} 
+                className="px-6 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </Modal>
