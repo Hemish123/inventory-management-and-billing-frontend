@@ -608,20 +608,32 @@ export default function POSPage() {
                     {branches.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
                   </select>
                 </div>
-                <div className="relative">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <input 
+                      list="customers-list"
+                      type="text" 
+                      placeholder="Name or Select..." 
+                      value={customerName} 
+                      onChange={handleCustomerInputChange} 
+                      className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full" 
+                    />
+                    <datalist id="customers-list">
+                      {customersList.map(c => (
+                        <option key={c.id} value={`${c.name}${c.phone ? ` - ${c.phone}` : ''}`} />
+                      ))}
+                    </datalist>
+                  </div>
                   <input 
-                    list="customers-list"
                     type="text" 
-                    placeholder="Search customer or type new name..." 
-                    value={customerName} 
-                    onChange={handleCustomerInputChange} 
+                    placeholder="Phone (WhatsApp)" 
+                    value={customerPhone} 
+                    onChange={e => {
+                      setCustomerPhone(e.target.value);
+                      if (selectedCustomerId) setSelectedCustomerId(null);
+                    }} 
                     className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full" 
                   />
-                  <datalist id="customers-list">
-                    {customersList.map(c => (
-                      <option key={c.id} value={`${c.name}${c.phone ? ` - ${c.phone}` : ''}`} />
-                    ))}
-                  </datalist>
                 </div>
               </div>
 
