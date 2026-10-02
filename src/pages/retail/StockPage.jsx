@@ -7,7 +7,7 @@ import { getStockMovements, adjustStock } from '../../api/stockAPI';
 import { getProductDropdown } from '../../api/productsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatDate } from '../../utils/formatters';
-import { Search, Plus, ArrowUpFromLine, ArrowDownToLine } from 'lucide-react';
+import { Search, Plus, ArrowUpFromLine, ArrowDownToLine, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function StockPage() {
@@ -16,14 +16,24 @@ export default function StockPage() {
   const [showModal, setShowModal] = useState(false);
   const [products, setProducts] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [form, setForm] = useState({ product: '', branch: '', quantity: '', reason: 'MANUAL', notes: '' });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [page]);
 
   const loadData = async () => {
     setLoading(true);
-    const [m, p, b] = await Promise.all([getStockMovements(), getProductDropdown(), getBranchDropdown()]);
-    if (m.data?.data) setMovements(Array.isArray(m.data.data) ? m.data.data : m.data.data.results || []);
+    const [m, p, b] = await Promise.all([getStockMovements({ page, page_size: 20 }), getProductDropdown(), getBranchDropdown()]);
+    if (m.data?.data) {
+      if (Array.isArray(m.data.data)) {
+        setMovements(m.data.data);
+        setTotalCount(m.data.data.length);
+      } else {
+        setMovements(m.data.data.results || []);
+        setTotalCount(m.data.data.count || 0);
+      }
+    }
     if (p.data?.data) setProducts(p.data.data);
     if (b.data?.data) setBranches(b.data.data);
     setLoading(false);
@@ -75,6 +85,19 @@ export default function StockPage() {
             <Table columns={columns} data={movements} />
           )}
         </div>
+
+        {Math.ceil(totalCount / 20) > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">{totalCount} movements total</p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
+              <span className="text-sm text-slate-600">Page {page} of {Math.ceil(totalCount / 20)}</span>
+              <button onClick={() => setPage(Math.min(Math.ceil(totalCount / 20), page + 1))} disabled={page === Math.ceil(totalCount / 20)}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showModal && (

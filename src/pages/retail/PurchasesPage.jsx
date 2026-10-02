@@ -7,13 +7,15 @@ import { getPurchases, createPurchase, receivePurchase } from '../../api/stockAP
 import { getProductDropdown, getSuppliers } from '../../api/productsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { Plus, CheckCircle, Truck, Trash2, Loader2, FileText } from 'lucide-react';
+import { Plus, CheckCircle, Truck, Trash2, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function PurchasesPage() {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -27,12 +29,20 @@ export default function PurchasesPage() {
     items: [{ product: '', quantity: 1, unit_cost: '' }]
   });
 
-  useEffect(() => { loadPurchases(); loadDropdowns(); }, []);
+  useEffect(() => { loadPurchases(); loadDropdowns(); }, [page]);
 
   const loadPurchases = async () => {
     setLoading(true);
-    const { data } = await getPurchases();
-    if (data?.data) setPurchases(Array.isArray(data.data) ? data.data : data.data.results || []);
+    const { data } = await getPurchases({ page, page_size: 20 });
+    if (data?.data) {
+      if (Array.isArray(data.data)) {
+        setPurchases(data.data);
+        setTotalCount(data.data.length);
+      } else {
+        setPurchases(data.data.results || []);
+        setTotalCount(data.data.count || 0);
+      }
+    }
     setLoading(false);
   };
 
@@ -146,6 +156,19 @@ export default function PurchasesPage() {
             <Table columns={columns} data={purchases} />
           )}
         </div>
+
+        {Math.ceil(totalCount / 20) > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">{totalCount} purchase orders total</p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
+              <span className="text-sm text-slate-600">Page {page} of {Math.ceil(totalCount / 20)}</span>
+              <button onClick={() => setPage(Math.min(Math.ceil(totalCount / 20), page + 1))} disabled={page === Math.ceil(totalCount / 20)}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showModal && (

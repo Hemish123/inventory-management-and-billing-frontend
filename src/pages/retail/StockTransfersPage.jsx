@@ -7,7 +7,7 @@ import { getStockTransfers, createStockTransfer, approveTransfer, rejectTransfer
 import { getProductDropdown } from '../../api/productsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatDate } from '../../utils/formatters';
-import { Plus, ArrowLeftRight, CheckCircle, XCircle, Truck, Trash2, Loader2, Ban } from 'lucide-react';
+import { Plus, ArrowLeftRight, CheckCircle, XCircle, Truck, Trash2, Loader2, Ban, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const STATUS_COLORS = {
@@ -27,17 +27,27 @@ export default function StockTransfersPage() {
   const [branches, setBranches] = useState([]);
   const [products, setProducts] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [form, setForm] = useState({
     from_branch: '', to_branch: '', notes: '',
     items: [{ product: '', quantity: 1 }]
   });
 
-  useEffect(() => { loadTransfers(); loadDropdowns(); }, []);
+  useEffect(() => { loadTransfers(); loadDropdowns(); }, [page]);
 
   const loadTransfers = async () => {
     setLoading(true);
-    const { data } = await getStockTransfers();
-    if (data?.data) setTransfers(Array.isArray(data.data) ? data.data : data.data.results || []);
+    const { data } = await getStockTransfers({ page, page_size: 20 });
+    if (data?.data) {
+      if (Array.isArray(data.data)) {
+        setTransfers(data.data);
+        setTotalCount(data.data.length);
+      } else {
+        setTransfers(data.data.results || []);
+        setTotalCount(data.data.count || 0);
+      }
+    }
     setLoading(false);
   };
 
@@ -138,6 +148,19 @@ export default function StockTransfersPage() {
             <Table columns={columns} data={transfers} />
           )}
         </div>
+
+        {Math.ceil(totalCount / 20) > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">{totalCount} transfers total</p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
+              <span className="text-sm text-slate-600">Page {page} of {Math.ceil(totalCount / 20)}</span>
+              <button onClick={() => setPage(Math.min(Math.ceil(totalCount / 20), page + 1))} disabled={page === Math.ceil(totalCount / 20)}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showModal && (

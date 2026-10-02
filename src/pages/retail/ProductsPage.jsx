@@ -9,7 +9,7 @@ import { getProducts, createProduct, updateProduct, deleteProduct, getCategories
 import { getSuppliers, createSupplier } from '../../api/productsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatCurrency } from '../../utils/formatters';
-import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer, Upload, FileUp, X, Check, Loader2 } from 'lucide-react';
+import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer, Upload, FileUp, X, Check, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Barcode from 'react-barcode';
 import { jsPDF } from 'jspdf';
@@ -94,6 +94,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -129,8 +131,18 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     setLoading(true);
-    const { data } = await getProducts({ search });
-    if (data?.data) setProducts(Array.isArray(data.data) ? data.data : data.data.results || []);
+    const params = { page, page_size: 20 };
+    if (search) params.search = search;
+    const { data } = await getProducts(params);
+    if (data?.data) {
+      if (Array.isArray(data.data)) {
+        setProducts(data.data);
+        setTotalCount(data.data.length);
+      } else {
+        setProducts(data.data.results || []);
+        setTotalCount(data.data.count || 0);
+      }
+    }
     setLoading(false);
   };
 
@@ -147,7 +159,7 @@ export default function ProductsPage() {
     }
   };
 
-  useEffect(() => { loadProducts(); }, [search]);
+  useEffect(() => { loadProducts(); }, [search, page]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -673,6 +685,19 @@ export default function ProductsPage() {
             />
           )}
         </div>
+
+        {Math.ceil(totalCount / 20) > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">{totalCount} products total</p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
+              <span className="text-sm text-slate-600">Page {page} of {Math.ceil(totalCount / 20)}</span>
+              <button onClick={() => setPage(Math.min(Math.ceil(totalCount / 20), page + 1))} disabled={page === Math.ceil(totalCount / 20)}
+                className="btn-secondary py-2 px-3 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add/Edit Product Modal */}
