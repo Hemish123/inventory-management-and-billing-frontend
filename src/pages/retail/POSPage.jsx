@@ -3,6 +3,7 @@ import Navbar from '../../components/common/Navbar';
 import Modal from '../../components/common/Modal';
 import { barcodeLookup, getProductDropdown } from '../../api/productsAPI';
 import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill } from '../../api/billingAPI';
+import { getCustomerDropdown, createCustomer } from '../../api/customerAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { getSalesPersons } from '../../api/authAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
@@ -10,7 +11,7 @@ import toast from 'react-hot-toast';
 import {
   ScanLine, Plus, Minus, Trash2, ShoppingCart, CreditCard,
   Banknote, Smartphone, X, Printer, Search, PauseCircle, PlayCircle,
-  Keyboard, HelpCircle, FileText
+  Keyboard, HelpCircle, FileText, UserPlus, ChevronDown
 } from 'lucide-react';
 
 const PAYMENT_ICONS = {
@@ -32,6 +33,13 @@ export default function POSPage() {
   const [selectedSalesPerson, setSelectedSalesPerson] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [customersList, setCustomersList] = useState([]);
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [addingCustomer, setAddingCustomer] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [amountReceived, setAmountReceived] = useState('');
   const [discountType, setDiscountType] = useState('NONE');
@@ -53,6 +61,7 @@ export default function POSPage() {
     loadBranches();
     loadProducts();
     loadSalesPersons();
+    loadCustomers();
     barcodeRef.current?.focus();
   }, []);
 
@@ -94,6 +103,55 @@ export default function POSPage() {
     if (data?.data) {
       const persons = Array.isArray(data.data) ? data.data : data.data.results || [];
       setSalesPersonsList(persons);
+    }
+  };
+
+  const loadCustomers = async () => {
+    const { data } = await getCustomerDropdown();
+    if (data?.data) setCustomersList(data.data);
+  };
+
+  const handleCustomerInputChange = (e) => {
+    const val = e.target.value;
+    const matched = customersList.find(c => `${c.name}${c.phone ? ` - ${c.phone}` : ''}` === val);
+    
+    if (matched) {
+      setSelectedCustomerId(matched.id);
+      setCustomerName(matched.name);
+      setCustomerPhone(matched.phone || '');
+    } else {
+      setSelectedCustomerId(null);
+      setCustomerName(val);
+      setCustomerPhone('');
+    }
+  };
+
+  const handleAddCustomerFromPOS = async () => {
+    if (!newCustomerName.trim()) {
+      toast.error('Customer name is required');
+      return;
+    }
+    setAddingCustomer(true);
+    const payload = {
+      name: newCustomerName.trim(),
+      phone: newCustomerPhone.trim(),
+      email: newCustomerEmail.trim(),
+    };
+    const { data, error } = await createCustomer(payload);
+    setAddingCustomer(false);
+    if (data?.data) {
+      toast.success(`Customer "${newCustomerName}" added!`);
+      const newCust = data.data;
+      setCustomersList(prev => [...prev, { id: newCust.id, name: newCust.name, phone: newCust.phone || '', email: newCust.email || '', gstin: newCust.gstin || '', address: newCust.address || '' }]);
+      setSelectedCustomerId(newCust.id);
+      setCustomerName(newCust.name);
+      setCustomerPhone(newCust.phone || '');
+      setShowAddCustomer(false);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerEmail('');
+    } else {
+      toast.error(error || 'Failed to add customer');
     }
   };
 
@@ -218,6 +276,7 @@ export default function POSPage() {
     setCart([]);
     setCustomerName('');
     setCustomerPhone('');
+    setSelectedCustomerId(null);
     setAmountReceived('');
     setDiscountType('NONE');
     setDiscountValue(0);
@@ -279,6 +338,7 @@ export default function POSPage() {
       items: processedCart,
       save_as_hold: saveAsHold,
     };
+    if (selectedCustomerId) payload.customer_id = selectedCustomerId;
     if (selectedSalesPerson) payload.salesperson_id = selectedSalesPerson;
     return payload;
   };
@@ -561,8 +621,31 @@ export default function POSPage() {
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Name (Walk-in)" value={customerName} onChange={e => setCustomerName(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
-                  <input type="text" placeholder="Phone " value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400" />
+                  <div className="relative">
+                    <input 
+                      list="customers-list"
+                      type="text" 
+                      placeholder="Name or Select..." 
+                      value={customerName} 
+                      onChange={handleCustomerInputChange} 
+                      className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full" 
+                    />
+                    <datalist id="customers-list">
+                      {customersList.map(c => (
+                        <option key={c.id} value={`${c.name}${c.phone ? ` - ${c.phone}` : ''}`} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Phone (WhatsApp)" 
+                    value={customerPhone} 
+                    onChange={e => {
+                      setCustomerPhone(e.target.value);
+                      if (selectedCustomerId) setSelectedCustomerId(null);
+                    }} 
+                    className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full" 
+                  />
                 </div>
               </div>
 
@@ -616,11 +699,21 @@ export default function POSPage() {
 
               {/* Cash Received Row */}
               {paymentMethod === 'CASH' && (
-                <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-sm">
+                <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-sm shrink-0">
                   <span className="text-xs font-bold text-emerald-800 whitespace-nowrap">Cash Received</span>
                   <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={grandTotal} className="flex-1 input-field bg-white text-sm font-bold font-mono text-emerald-700 border-emerald-300 py-1 px-2.5 focus:border-emerald-500 shadow-sm text-right" />
                 </div>
               )}
+
+              {/* Bill Notes (Fills empty space) */}
+              <div className="flex-1 min-h-[70px] pt-1">
+                <textarea 
+                  value={notes} 
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Add bill notes or remarks here..."
+                  className="w-full h-full bg-slate-50 border border-slate-200 focus:border-indigo-400 rounded-xl p-2.5 text-xs text-slate-700 resize-none shadow-sm placeholder-slate-400 outline-none transition-colors"
+                />
+              </div>
           </div>
 
           {/* Checkout Totals — always pinned at bottom */}
@@ -753,6 +846,40 @@ export default function POSPage() {
                 className="px-6 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold transition-colors"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add Customer from POS Modal */}
+      {showAddCustomer && (
+        <Modal title="Add New Customer" onClose={() => { setShowAddCustomer(false); setNewCustomerName(''); setNewCustomerPhone(''); setNewCustomerEmail(''); }}>
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1 block">Name *</label>
+              <input type="text" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)}
+                placeholder="Customer name" className="input-field" autoFocus />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1 block">Phone</label>
+              <input type="text" value={newCustomerPhone} onChange={e => setNewCustomerPhone(e.target.value)}
+                placeholder="Phone number" className="input-field" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1 block">Email</label>
+              <input type="email" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)}
+                placeholder="Email (optional)" className="input-field" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => { setShowAddCustomer(false); setNewCustomerName(''); setNewCustomerPhone(''); setNewCustomerEmail(''); }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleAddCustomerFromPOS} disabled={addingCustomer || !newCustomerName.trim()}
+                className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-indigo-500/20">
+                <UserPlus className="w-4 h-4" />
+                {addingCustomer ? 'Adding...' : 'Add Customer'}
               </button>
             </div>
           </div>
