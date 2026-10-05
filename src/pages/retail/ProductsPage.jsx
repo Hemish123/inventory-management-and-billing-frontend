@@ -25,9 +25,11 @@ import html2canvas from 'html2canvas';
  */
 const STICKER_CONFIGS = {
   l48: {
+    // Grid: 4×48 + 3×2 = 198mm wide → margin = (210-198)/2 = 6
+    // Grid: 12×24 + 11×0.25 = 290.75mm tall → margin = (297-290.75)/2 = 3.125
     cols: 4, rows: 12, labelW: 48, labelH: 24, gapX: 2, gapY: 0.25,
-    pageMarginTop: 1.125,  // (297 - 12*24 - 11*0.25) / 2
-    pageMarginLeft: 8,     // (210 - 4*48 - 3*2) / 2
+    pageMarginTop: 3.125,
+    pageMarginLeft: 6,
     // Label internals (mm)
     padTop: 0.5, padBottom: 0.5, padLeft: 1.5, padRight: 1.5,
     barcodeW: 38, barcodeH: 8,
@@ -39,9 +41,11 @@ const STICKER_CONFIGS = {
     pdfScale: 3,
   },
   l16: {
+    // Grid: 2×99 + 1×2 = 200mm wide → margin = (210-200)/2 = 5
+    // Grid: 8×34 + 7×1.28 = 280.96mm tall → margin = (297-280.96)/2 = 8.02
     cols: 2, rows: 8, labelW: 99, labelH: 34, gapX: 2, gapY: 1.28,
-    pageMarginTop: 2.52,   // (297 - 8*34 - 7*1.28) / 2
-    pageMarginLeft: 4,     // (210 - 2*99 - 1*2) / 2 = 5 → use 4 for safety
+    pageMarginTop: 8.02,
+    pageMarginLeft: 5,
     padTop: 1.5, padBottom: 1.5, padLeft: 2, padRight: 2,
     leftColW: 48, rightColW: 45,
     barcodeW: 46, barcodeH: 14,
@@ -54,9 +58,11 @@ const STICKER_CONFIGS = {
     pdfScale: 3,
   },
   l40: {
+    // Grid: 10×18 + 9×1 = 189mm wide → margin = (210-189)/2 = 10.5
+    // Grid: 4×73 + 3×1 = 295mm tall → margin = (297-295)/2 = 1
     cols: 10, rows: 4, labelW: 18, labelH: 73, gapX: 1, gapY: 1,
-    pageMarginTop: 1.5,
-    pageMarginLeft: 1.5,
+    pageMarginTop: 1,
+    pageMarginLeft: 10.5,
     barcodeW: 48, barcodeH: 4.5,
     companyFont: 5,
     digitsFont: 5,
@@ -66,9 +72,11 @@ const STICKER_CONFIGS = {
     pdfScale: 4,
   },
   l110: {
+    // Grid: 5×35 + 4×2 = 183mm wide → margin = (210-183)/2 = 13.5
+    // Grid: 22×10 + 21×2.5 = 272.5mm tall → margin = (297-272.5)/2 = 12.25
     cols: 5, rows: 22, labelW: 35, labelH: 10, gapX: 2, gapY: 2.5,
-    pageMarginTop: 3.75,
-    pageMarginLeft: 7.5,
+    pageMarginTop: 12.25,
+    pageMarginLeft: 13.5,
     barcodeW: 19, barcodeH: 2,
     digitsFont: 3,
     companyFont: 3.5,
@@ -79,9 +87,6 @@ const STICKER_CONFIGS = {
     pdfScale: 4,
   },
 };
-
-// Recalculate l110 margins: 22*10 + 21*2.5 = 220 + 52.5 = 272.5 → (297-272.5)/2 = 12.25
-STICKER_CONFIGS.l110.pageMarginTop = 12.25;
 
 /* Decide barcode format: CODE128C for all-digit even-length, else CODE128 */
 function barcodeFormat(val) {
