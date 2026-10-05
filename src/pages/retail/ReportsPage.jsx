@@ -209,6 +209,7 @@ export default function ReportsPage() {
         </div>
         {renderTable(data.items, [
           { key: 'product_name', label: 'Product' },
+          { key: 'brand_name', label: 'Brand' },
           { key: 'branch', label: 'Branch' },
           { key: 'quantity', label: 'Qty' },
           { key: 'cost_value', label: 'Cost Value', render: v => fmt(v) },
@@ -221,22 +222,22 @@ export default function ReportsPage() {
     if (Array.isArray(data)) {
       const columns = {
         'inventory': [
-          { key: 'product_name', label: 'Product' }, { key: 'sku', label: 'SKU' },
+          { key: 'product_name', label: 'Product' }, { key: 'brand_name', label: 'Brand' }, { key: 'sku', label: 'SKU' },
           { key: 'branch', label: 'Branch' }, { key: 'quantity', label: 'Qty' },
           { key: 'stock_value', label: 'Value', render: v => fmt(v) },
         ],
         'top-products': [
-          { key: 'product_name', label: 'Product' }, { key: 'barcode', label: 'Barcode' },
+          { key: 'product_name', label: 'Product' }, { key: 'brand_name', label: 'Brand' }, { key: 'barcode', label: 'Barcode' },
           { key: 'total_quantity', label: 'Qty Sold' },
           { key: 'total_revenue', label: 'Revenue', render: v => fmt(v) },
         ],
         'low-stock': [
-          { key: 'product_name', label: 'Product' }, { key: 'branch', label: 'Branch' },
+          { key: 'product_name', label: 'Product' }, { key: 'brand_name', label: 'Brand' }, { key: 'branch', label: 'Branch' },
           { key: 'current_stock', label: 'Current' }, { key: 'minimum_level', label: 'Minimum' },
           { key: 'deficit', label: 'Deficit', render: v => <span className="text-rose-600 font-bold">-{v}</span> },
         ],
         'dead-stock': [
-          { key: 'product_name', label: 'Product' }, { key: 'sku', label: 'SKU' },
+          { key: 'product_name', label: 'Product' }, { key: 'brand_name', label: 'Brand' }, { key: 'sku', label: 'SKU' },
           { key: 'category', label: 'Category' },
           { key: 'cost_price', label: 'Cost', render: v => fmt(v) },
           { key: 'selling_price', label: 'Sell', render: v => fmt(v) },
@@ -317,7 +318,15 @@ export default function ReportsPage() {
                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
-            {/* Sales Person filter removed as requested */}
+            {SALES_FILTERABLE.includes(active) && (
+              <div>
+                <label className="text-xs font-medium text-slate-500">Sales Person</label>
+                <select value={filters.cashier} onChange={e => setFilters({...filters, cashier: e.target.value})} className="input-field mt-1 text-sm">
+                  <option value="">All</option>
+                  {salesPersons.map(sp => <option key={sp.id} value={sp.id}>{sp.first_name} {sp.last_name}</option>)}
+                </select>
+              </div>
+            )}
             <button onClick={() => {
               if (active) loadReport(active);
             }}

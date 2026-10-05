@@ -686,18 +686,16 @@ export default function POSPage() {
               </div>
 
               {/* Sales Person Dropdown */}
-              {salesPersonsList.length > 0 && (
-                <div className="space-y-1">
-                  <h3 className="font-bold text-slate-800 text-xs">Sales Person</h3>
-                  <select value={selectedSalesPerson} onChange={e => setSelectedSalesPerson(e.target.value)}
-                    className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full">
-                    <option value="">Self (Default)</option>
-                    {salesPersonsList.map(sp => (
-                      <option key={sp.id} value={sp.id}>{sp.first_name} {sp.last_name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div className="space-y-1">
+                <h3 className="font-bold text-slate-800 text-xs">Sales Person</h3>
+                <select value={selectedSalesPerson} onChange={e => setSelectedSalesPerson(e.target.value)}
+                  className="input-field bg-slate-50 py-1.5 text-xs px-2.5 shadow-sm border-slate-200 focus:border-indigo-400 w-full">
+                  <option value="">Self (Default)</option>
+                  {salesPersonsList.map(sp => (
+                    <option key={sp.id} value={sp.id}>{sp.first_name} {sp.last_name}</option>
+                  ))}
+                </select>
+              </div>
 
               {/* Payment Methods */}
               <div className="space-y-1.5">
