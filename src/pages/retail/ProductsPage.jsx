@@ -127,8 +127,8 @@ export default function ProductsPage() {
 
   const [form, setForm] = useState({
     name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
-    unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18,
-    minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: '',
+    unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 0,
+    minimum_stock_level: 0, reorder_level: 20, dead_stock_days: 0, initial_stock: '', initial_stock_branch: '',
   });
   const [stockModal, setStockModal] = useState({ isOpen: false, product: null, stocks: [], loading: false });
 
@@ -192,6 +192,8 @@ export default function ProductsPage() {
     if (!payload.brand) delete payload.brand;
     if (!payload.supplier) delete payload.supplier;
     if (!payload.barcode) delete payload.barcode;
+    if (payload.selling_price === '') delete payload.selling_price;
+    if (payload.cost_price === '') delete payload.cost_price;
     delete payload.supplier_name;
 
     // Remove initial_stock and initial_stock_branch for edit requests (stock is managed separately)
@@ -215,7 +217,7 @@ export default function ProductsPage() {
       setEditingId(null);
       setForm({
         name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '',
-        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: branches[0]?.id || ''
+        unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 0, minimum_stock_level: 0, reorder_level: 20, dead_stock_days: 0, initial_stock: '', initial_stock_branch: branches[0]?.id || ''
       });
       loadProducts();
     } else toast.error(error || 'Failed');
@@ -235,9 +237,10 @@ export default function ProductsPage() {
       cost_price: product.cost_price || '',
       selling_price: product.selling_price || '',
       hsn_code: product.hsn_code || '',
-      tax_percentage: product.tax_percentage || 18,
-      minimum_stock_level: product.minimum_stock_level || 10,
-      reorder_level: product.reorder_level || 20
+      tax_percentage: product.tax_percentage !== undefined ? product.tax_percentage : 0,
+      minimum_stock_level: product.minimum_stock_level !== undefined ? product.minimum_stock_level : 0,
+      reorder_level: product.reorder_level !== undefined ? product.reorder_level : 20,
+      dead_stock_days: product.dead_stock_days !== undefined ? product.dead_stock_days : 0
     });
     setShowModal(true);
   };
@@ -707,7 +710,7 @@ export default function ProductsPage() {
 
       {/* Add/Edit Product Modal */}
       {showModal && (
-        <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }}>
+        <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 0, minimum_stock_level: 0, reorder_level: 20, dead_stock_days: 0, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }}>
           <form onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -748,8 +751,8 @@ export default function ProductsPage() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-medium text-slate-500">Selling Price *</label>
-                <input required type="number" step="0.01" value={form.selling_price}
+                <label className="text-xs font-medium text-slate-500">Selling Price</label>
+                <input type="number" step="0.01" value={form.selling_price}
                   onChange={e => setForm({ ...form, selling_price: e.target.value })} className="input-field mt-1" />
               </div>
               <div>
@@ -770,7 +773,7 @@ export default function ProductsPage() {
                 <label className="text-xs font-medium text-slate-500">Unit</label>
                 <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}
                   className="input-field mt-1">
-                  {['Nos', 'Kg', 'Ltr', 'Mtr', 'Box', 'Pcs', 'Set', 'Pair', 'Dozen'].map(u =>
+                  {['Nos', 'Kg', 'Ltr', 'Mtr', 'Box', 'Pcs', 'Set', 'Pair', 'Dozen', 'Packets', 'Cartoon'].map(u =>
                     <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
@@ -782,7 +785,7 @@ export default function ProductsPage() {
               <div>
                 <label className="text-xs font-medium text-slate-500">Min Stock Level</label>
                 <input type="number" value={form.minimum_stock_level}
-                  onChange={e => setForm({ ...form, minimum_stock_level: parseInt(e.target.value) || 0 })}
+                  onChange={e => setForm({ ...form, minimum_stock_level: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
                   className="input-field mt-1" />
               </div>
             </div>
@@ -796,8 +799,8 @@ export default function ProductsPage() {
               <div>
                 <label className="text-xs font-medium text-slate-500">Dead Stock Days</label>
                 <input type="number" value={form.dead_stock_days}
-                  onChange={e => setForm({ ...form, dead_stock_days: parseInt(e.target.value) || 90 })}
-                  placeholder="90"
+                  onChange={e => setForm({ ...form, dead_stock_days: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
+                  placeholder="0"
                   className="input-field mt-1" />
                 <p className="text-[10px] text-slate-400 mt-0.5">No sale in these days = dead stock</p>
               </div>
@@ -826,7 +829,7 @@ export default function ProductsPage() {
               )}
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 18, minimum_stock_level: 10, reorder_level: 20, dead_stock_days: 90, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 0, minimum_stock_level: 0, reorder_level: 20, dead_stock_days: 0, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }} className="btn-secondary px-4 py-2">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors">
                 {editingId ? "Save Changes" : "Create Product"}
               </button>
