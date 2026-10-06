@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/common/Navbar';
 import Table from '../../components/common/Table';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
-import { getBills, voidBill } from '../../api/billingAPI';
+import { getBills, voidBill, deleteBill } from '../../api/billingAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { Search, XCircle, FileText, PlayCircle, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, XCircle, FileText, PlayCircle, Pencil, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function BillsPage() {
@@ -39,6 +39,13 @@ export default function BillsPage() {
     const { error } = await voidBill(id);
     if (error) toast.error(error);
     else { toast.success(`Bill ${billNumber} voided`); loadBills(); }
+  };
+
+  const handleDelete = async (id, billNumber) => {
+    if (!window.confirm(`Delete bill ${billNumber} completely? This will restore stock.`)) return;
+    const { error } = await deleteBill(id);
+    if (error) toast.error(error);
+    else { toast.success(`Bill ${billNumber} deleted`); loadBills(); }
   };
 
   const filtered = bills.filter(b =>
@@ -87,6 +94,10 @@ export default function BillsPage() {
             <XCircle className="w-5 h-5" />
           </button>
         )}
+        <button onClick={() => handleDelete(row.id, row.bill_number)}
+          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors" title="Delete Bill">
+          <Trash2 className="w-5 h-5" />
+        </button>
       </div>
     )},
   ];

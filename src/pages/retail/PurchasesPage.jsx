@@ -3,11 +3,11 @@ import Navbar from '../../components/common/Navbar';
 import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
-import { getPurchases, createPurchase, receivePurchase } from '../../api/stockAPI';
+import { getPurchases, getPurchase, createPurchase, receivePurchase, updatePurchase, deletePurchase } from '../../api/stockAPI';
 import { getProductDropdown, getSuppliers } from '../../api/productsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { Plus, CheckCircle, Truck, Trash2, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, CheckCircle, Truck, Trash2, Pencil, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function PurchasesPage() {
@@ -16,6 +16,7 @@ export default function PurchasesPage() {
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [editingId, setEditingId] = useState(null);
   
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -63,6 +64,38 @@ export default function PurchasesPage() {
     else { toast.success(`PO ${poNumber} received — stock updated`); loadPurchases(); }
   };
 
+  const handleEdit = async (id) => {
+    setLoading(true);
+    const { data } = await getPurchase(id);
+    setLoading(false);
+    if (data?.data) {
+      const p = data.data;
+      setEditingId(p.id);
+      setForm({
+        branch_id: p.branch,
+        supplier: p.supplier,
+        invoice_number: p.invoice_number || '',
+        purchase_date: p.purchase_date,
+        gst_percentage: p.gst_percentage || 0,
+        items: p.items?.length > 0 ? p.items.map(i => ({
+          product: i.product,
+          quantity: i.quantity,
+          unit_cost: i.unit_cost
+        })) : [{ product: '', quantity: 1, unit_cost: '' }]
+      });
+      setShowModal(true);
+    } else {
+      toast.error('Failed to fetch purchase details');
+    }
+  };
+
+  const handleDelete = async (id, poNumber) => {
+    if (!window.confirm(`Delete PO ${poNumber}? This will revert any stock added.`)) return;
+    const { error } = await deletePurchase(id);
+    if (error) toast.error(error);
+    else { toast.success(`PO ${poNumber} deleted`); loadPurchases(); }
+  };
+
   const handleItemChange = (index, field, value) => {
     const newItems = [...form.items];
     newItems[index][field] = value;
@@ -102,15 +135,21 @@ export default function PurchasesPage() {
       items: processedItems,
     };
     
-    const { data, error } = await createPurchase(payload);
+    let data, error;
+    if (editingId) {
+      ({ data, error } = await updatePurchase(editingId, payload));
+    } else {
+      ({ data, error } = await createPurchase(payload));
+    }
     
     setSubmitting(false);
     if (data) {
-      toast.success('Purchase order created successfully');
+      toast.success(editingId ? 'Purchase order updated successfully' : 'Purchase order created successfully');
       setShowModal(false);
+      setEditingId(null);
       setForm({ ...form, invoice_number: '', gst_percentage: 0, items: [{ product: '', quantity: 1, unit_cost: '' }] });
       loadPurchases();
-    } else toast.error(error || 'Failed to create purchase order');
+    } else toast.error(error || (editingId ? 'Failed to update purchase order' : 'Failed to create purchase order'));
   };
 
   const columns = [
@@ -129,12 +168,24 @@ export default function PurchasesPage() {
       }`}>{v}</span>
     )},
     { key: 'purchase_date', label: 'Date', render: v => formatDate(v) },
-    { key: 'actions', label: '', render: (_, row) => !['RECEIVED', 'CANCELLED'].includes(row.status) ? (
-      <button onClick={() => handleReceive(row.id, row.po_number)}
-        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
-        <CheckCircle className="w-3 h-3" /> Receive
-      </button>
-    ) : null },
+    { key: 'actions', label: '', render: (_, row) => (
+      <div className="flex justify-end gap-2">
+        {!['RECEIVED', 'CANCELLED'].includes(row.status) && (
+          <button onClick={() => handleReceive(row.id, row.po_number)}
+            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors" title="Receive">
+            <CheckCircle className="w-3 h-3" /> Receive
+          </button>
+        )}
+        <button onClick={() => handleEdit(row.id)}
+          className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Purchase">
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button onClick={() => handleDelete(row.id, row.po_number)}
+          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors" title="Delete Purchase">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    ) },
   ];
 
   const subtotal = form.items.reduce((s, i) => s + ((parseFloat(i.quantity)||0) * (parseFloat(i.unit_cost)||0)), 0);
@@ -145,7 +196,7 @@ export default function PurchasesPage() {
       <Navbar title="Purchase Orders" />
       <div className="p-6 space-y-6">
         <div className="flex justify-end">
-          <button onClick={() => setShowModal(true)}
+          <button onClick={() => { setEditingId(null); setForm({ ...form, invoice_number: '', gst_percentage: 0, items: [{ product: '', quantity: 1, unit_cost: '' }] }); setShowModal(true); }}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
             <Plus className="w-4 h-4" /> Create PO
           </button>
@@ -172,7 +223,7 @@ export default function PurchasesPage() {
       </div>
 
       {showModal && (
-        <Modal title="Create Purchase Order" onClose={() => setShowModal(false)} size="lg">
+        <Modal title={editingId ? "Edit Purchase Order" : "Create Purchase Order"} onClose={() => { setShowModal(false); setEditingId(null); }} size="lg">
           <form onSubmit={handleSubmit} className="space-y-6 p-4">
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -249,9 +300,9 @@ export default function PurchasesPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); }} className="btn-secondary px-4 py-2">Cancel</button>
               <button type="submit" disabled={submitting} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-70 transition-colors">
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Create PO
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />} {editingId ? 'Save Changes' : 'Create PO'}
               </button>
             </div>
           </form>

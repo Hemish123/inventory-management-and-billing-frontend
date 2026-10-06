@@ -3,11 +3,11 @@ import Navbar from '../../components/common/Navbar';
 import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
-import { getStockMovements, adjustStock } from '../../api/stockAPI';
+import { getStockMovements, adjustStock, updateStockMovement, deleteStockMovement } from '../../api/stockAPI';
 import { getProductDropdown } from '../../api/productsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatDate } from '../../utils/formatters';
-import { Search, Plus, ArrowUpFromLine, ArrowDownToLine, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, ArrowUpFromLine, ArrowDownToLine, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function StockPage() {
@@ -18,6 +18,7 @@ export default function StockPage() {
   const [branches, setBranches] = useState([]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ product: '', branch: '', quantity: '', reason: 'MANUAL', notes: '' });
 
   useEffect(() => { loadData(); }, [page]);
@@ -41,13 +42,39 @@ export default function StockPage() {
 
   const handleAdjust = async (e) => {
     e.preventDefault();
-    const { data, error } = await adjustStock(form);
+    let data, error;
+    if (editingId) {
+      ({ data, error } = await updateStockMovement(editingId, form));
+    } else {
+      ({ data, error } = await adjustStock(form));
+    }
+    
     if (data) {
-      toast.success('Stock adjusted');
+      toast.success(editingId ? 'Stock movement updated' : 'Stock adjusted');
       setShowModal(false);
+      setEditingId(null);
       setForm({ product: '', branch: '', quantity: '', reason: 'MANUAL', notes: '' });
       loadData();
     } else toast.error(error || 'Failed');
+  };
+
+  const handleEdit = (movement) => {
+    setEditingId(movement.id);
+    setForm({
+      product: movement.product,
+      branch: movement.branch,
+      quantity: movement.quantity,
+      reason: movement.reason,
+      notes: movement.notes || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this stock movement? This will revert the stock balance.')) return;
+    const { error } = await deleteStockMovement(id);
+    if (error) toast.error(error);
+    else { toast.success('Stock movement deleted'); loadData(); }
   };
 
   const columns = [
@@ -68,6 +95,18 @@ export default function StockPage() {
     { key: 'balance_after', label: 'Balance', render: v => <span className="font-semibold">{v}</span> },
     { key: 'reference_id', label: 'Ref', render: v => v ? <span className="text-xs font-mono text-slate-400">{v}</span> : '—' },
     { key: 'created_at', label: 'Date', render: v => formatDate(v) },
+    { key: 'actions', label: '', render: (_, row) => (
+      <div className="flex justify-end gap-2">
+        <button onClick={() => handleEdit(row)}
+          className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button onClick={() => handleDelete(row.id)}
+          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    )},
   ];
 
   return (
@@ -75,7 +114,7 @@ export default function StockPage() {
       <Navbar title="Stock Movements" />
       <div className="p-6 space-y-6">
         <div className="flex gap-3">
-          <button onClick={() => setShowModal(true)}
+          <button onClick={() => { setEditingId(null); setForm({ product: '', branch: '', quantity: '', reason: 'MANUAL', notes: '' }); setShowModal(true); }}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20">
             <Plus className="w-4 h-4" /> Manual Adjustment
           </button>
@@ -101,7 +140,7 @@ export default function StockPage() {
       </div>
 
       {showModal && (
-        <Modal title="Stock Adjustment" onClose={() => setShowModal(false)}>
+        <Modal title={editingId ? "Edit Stock Movement" : "Stock Adjustment"} onClose={() => { setShowModal(false); setEditingId(null); }}>
           <form onSubmit={handleAdjust} className="space-y-4 p-4">
             <div>
               <label className="text-xs font-medium text-slate-500">Product *</label>
@@ -137,8 +176,10 @@ export default function StockPage() {
                 className="input-field mt-1" rows={2} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="btn-secondary px-4 py-2">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold">Adjust Stock</button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingId(null); }} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold">
+                {editingId ? 'Save Changes' : 'Adjust Stock'}
+              </button>
             </div>
           </form>
         </Modal>
