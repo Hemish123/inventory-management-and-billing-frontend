@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 import Navbar from '../../components/common/Navbar';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { getDashboardStats, getSalesTrend, getTopProducts, getLowStockReport } from '../../api/reportsAPI';
@@ -106,11 +108,17 @@ function LowStockAlerts({ data }) {
 }
 
 export default function RetailDashboard() {
+  const { user } = useAuth();
+  
   const [stats, setStats] = useState(null);
   const [trend, setTrend] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  if (user?.role_name === 'EMPLOYEE') {
+    return <Navigate to="/pos" replace />;
+  }
 
   useEffect(() => {
     loadAll();

@@ -176,15 +176,7 @@ export default function ProductsPage() {
       if (existing) {
         payload.supplier = existing.id;
       } else {
-        try {
-          const { data: newSupplier } = await createSupplier({ name: payload.supplier_name.trim() });
-          if (newSupplier) {
-            payload.supplier = newSupplier.id;
-            setSuppliers(prev => [...prev, newSupplier]);
-          }
-        } catch (err) {
-          console.error("Failed to create supplier", err);
-        }
+        payload.supplier = payload.supplier_name.trim(); // let backend create it
       }
     }
 
@@ -712,7 +704,7 @@ export default function ProductsPage() {
       {showModal && (
         <Modal title={editingId ? "Edit Product" : "Add Product"} onClose={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 0, minimum_stock_level: 0, reorder_level: 0, dead_stock_days: 0, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }}>
           <form onSubmit={handleSubmit} className="space-y-4 p-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div>
                 <label className="text-xs font-medium text-slate-500">Name *</label>
                 <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
@@ -727,6 +719,11 @@ export default function ProductsPage() {
                 <label className="text-xs font-medium text-slate-500">SKU</label>
                 <input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })}
                   className="input-field mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Description</label>
+                <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                  placeholder="Short desc..." className="input-field mt-1" />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">

@@ -127,13 +127,21 @@ export default function Sidebar() {
       {/* Nav Items */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
         {navItems
-          .filter(item => !(user?.role_name === 'EMPLOYEE' && item.path === '/users'))
+          .filter(item => {
+            if (user?.role_name === 'EMPLOYEE') {
+              const hiddenForEmployee = ['/dashboard', '/suppliers', '/products', '/purchases', '/reports', '/users'];
+              return !hiddenForEmployee.includes(item.path);
+            }
+            return true;
+          })
           .map(renderNavItem)}
 
         {/* Settings */}
-        <div className="pt-2">
-          {renderNavItem({ path: '/settings', label: 'Settings', icon: Settings })}
-        </div>
+        {user?.role_name !== 'EMPLOYEE' && (
+          <div className="pt-2">
+            {renderNavItem({ path: '/settings', label: 'Settings', icon: Settings })}
+          </div>
+        )}
       </nav>
 
       {/* User section */}

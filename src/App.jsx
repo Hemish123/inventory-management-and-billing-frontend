@@ -26,6 +26,13 @@ function PrivateRoute({ children }) {
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 }
 
+function RoleBasedRedirect() {
+  const { user, isAuthenticated } = useSelector((s) => s.auth);
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role_name === 'EMPLOYEE') return <Navigate to="/pos" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
 function AppLayout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-mesh">
@@ -66,8 +73,8 @@ export default function App() {
           <Route path="/users" element={<PrivateRoute><AppLayout><UsersPage /></AppLayout></PrivateRoute>} />
 
           {/* ─── Redirects ─── */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<RoleBasedRedirect />} />
+          <Route path="*" element={<RoleBasedRedirect />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

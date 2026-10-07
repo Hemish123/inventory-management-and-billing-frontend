@@ -20,7 +20,11 @@ export const useAuth = () => {
     dispatch(setCredentials(data.data));
     toast.success('Login successful!');
     if (!data.data.reactivated) {
-      navigate('/dashboard');
+      if (data.data.user?.role_name === 'EMPLOYEE') {
+        navigate('/pos');
+      } else {
+        navigate('/dashboard');
+      }
     }
     return { success: true, reactivated: data.data.reactivated };
   };
