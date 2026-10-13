@@ -42,6 +42,9 @@ export default function POSPage() {
   const [addingCustomer, setAddingCustomer] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [amountReceived, setAmountReceived] = useState('');
+  const [splitCash, setSplitCash] = useState('');
+  const [splitUpi, setSplitUpi] = useState('');
+  const [splitCard, setSplitCard] = useState('');
   const [discountType, setDiscountType] = useState('NONE');
   const [discountValue, setDiscountValue] = useState(0);
   const [notes, setNotes] = useState('');
@@ -283,6 +286,9 @@ export default function POSPage() {
     setCustomerPhone('');
     setSelectedCustomerId(null);
     setAmountReceived('');
+    setSplitCash('');
+    setSplitUpi('');
+    setSplitCard('');
     setDiscountValue(0);
     setNotes('');
     setActiveDraftId(null);
@@ -326,7 +332,9 @@ export default function POSPage() {
   const grandTotal = Math.round(preRoundTotal);
   const roundOff = grandTotal - preRoundTotal;
   
-  const changeDue = Math.max(0, (parseFloat(amountReceived) || grandTotal) - grandTotal);
+  const splitTotal = (parseFloat(splitCash)||0) + (parseFloat(splitUpi)||0) + (parseFloat(splitCard)||0);
+  const actualAmountReceived = paymentMethod === 'SPLIT' ? splitTotal : (parseFloat(amountReceived) || grandTotal);
+  const changeDue = Math.max(0, actualAmountReceived - grandTotal);
 
   const buildPayload = (saveAsHold = false) => {
     const payload = {
@@ -334,7 +342,7 @@ export default function POSPage() {
       customer_name: customerName || 'Walk-in Customer',
       customer_phone: customerPhone,
       payment_method: paymentMethod,
-      amount_received: parseFloat(amountReceived) || grandTotal,
+      amount_received: actualAmountReceived,
       discount_type: discountType,
       discount_percentage: discountType === 'PERCENTAGE' ? discountValue : 0,
       discount_amount: parseFloat(overallDisc.toFixed(2)),
@@ -345,6 +353,15 @@ export default function POSPage() {
     };
     if (selectedCustomerId) payload.customer_id = selectedCustomerId;
     if (selectedSalesPerson) payload.salesperson_id = selectedSalesPerson;
+    
+    if (paymentMethod === 'SPLIT') {
+      const payments = [];
+      if (parseFloat(splitCash) > 0) payments.push({ payment_method: 'CASH', amount: parseFloat(splitCash) });
+      if (parseFloat(splitUpi) > 0) payments.push({ payment_method: 'UPI', amount: parseFloat(splitUpi) });
+      if (parseFloat(splitCard) > 0) payments.push({ payment_method: 'CARD', amount: parseFloat(splitCard) });
+      payload.payments = payments;
+    }
+    
     return payload;
   };
 
@@ -368,7 +385,51 @@ export default function POSPage() {
       resetForm();
     } else toast.error(error || 'Failed to save draft');
   };
+
   holdBillRef.current = handleHoldBill;
+
+  // --- Auto Save Draft on Unmount ---
+  const autoSaveRef = useRef(null);
+  useEffect(() => {
+    if (cart.length > 0 && selectedBranch) {
+      autoSaveRef.current = {
+        payload: buildPayload(true),
+        draftId: activeDraftId
+      };
+    } else {
+      autoSaveRef.current = null;
+    }
+  }); // runs every render to keep ref updated
+
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && autoSaveRef.current) {
+        const { payload, draftId } = autoSaveRef.current;
+        if (draftId) {
+          // Fire and forget using standard fetch
+          discardDraft(draftId).then(() => createBill(payload)).catch(() => {});
+        } else {
+          createBill(payload).catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Component unmounting
+      if (autoSaveRef.current) {
+        const { payload, draftId } = autoSaveRef.current;
+        if (draftId) {
+          discardDraft(draftId).then(() => createBill(payload)).catch(() => {});
+        } else {
+          createBill(payload).catch(() => {});
+        }
+      }
+    };
+  }, []);
+
+  // ----------------------------------
 
   const handleResumeDraft = async (draftId) => {
     // Auto-save current bill as draft if cart has items and it's a different bill
@@ -491,10 +552,35 @@ export default function POSPage() {
       setLastBill(res.data.data);
       
       if (receiptType === 'PDF') {
-        const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
-        const printWindow = window.open(printUrl, '_blank');
-        if(printWindow) {
-          printWindow.onload = () => printWindow.print();
+        try {
+          const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
+          const printToast = toast.loading("Preparing receipt...");
+          
+          const response = await fetch(printUrl);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = blobUrl;
+          document.body.appendChild(iframe);
+          
+          iframe.onload = () => {
+            setTimeout(() => {
+              iframe.contentWindow.focus();
+              iframe.contentWindow.print();
+              toast.dismiss(printToast);
+              
+              // Clean up
+              setTimeout(() => {
+                document.body.removeChild(iframe);
+                URL.revokeObjectURL(blobUrl);
+              }, 60000); // 1 minute to allow print dialog to finish
+            }, 500);
+          };
+        } catch (error) {
+          console.error('Print failed', error);
+          toast.error("Failed to prepare print");
         }
       } else if (receiptType === 'WHATSAPP') {
         toast.success('WhatsApp receipt sending triggered!');
@@ -739,6 +825,32 @@ export default function POSPage() {
                 </div>
               )}
 
+              {/* Split Payment Row */}
+              {paymentMethod === 'SPLIT' && (
+                <div className="bg-indigo-50 p-2 rounded-xl border border-indigo-200 flex flex-col gap-2 shadow-sm shrink-0">
+                  <span className="text-xs font-bold text-indigo-800">Split Breakdown</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-[10px] font-semibold text-indigo-700 block mb-1">Cash</span>
+                      <input type="number" value={splitCash} onChange={e => setSplitCash(e.target.value)} placeholder="0" className="w-full input-field bg-white text-xs font-bold font-mono text-indigo-900 border-indigo-300 py-1 px-2 focus:border-indigo-500 shadow-sm text-right" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-indigo-700 block mb-1">UPI</span>
+                      <input type="number" value={splitUpi} onChange={e => setSplitUpi(e.target.value)} placeholder="0" className="w-full input-field bg-white text-xs font-bold font-mono text-indigo-900 border-indigo-300 py-1 px-2 focus:border-indigo-500 shadow-sm text-right" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-indigo-700 block mb-1">Card</span>
+                      <input type="number" value={splitCard} onChange={e => setSplitCard(e.target.value)} placeholder="0" className="w-full input-field bg-white text-xs font-bold font-mono text-indigo-900 border-indigo-300 py-1 px-2 focus:border-indigo-500 shadow-sm text-right" />
+                    </div>
+                  </div>
+                  {splitTotal > 0 && splitTotal !== grandTotal && (
+                    <div className="text-[10px] font-bold text-right text-rose-500 mt-1">
+                      Total: {splitTotal.toFixed(2)} / {grandTotal.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Bill Notes (Fills empty space) */}
               <div className="flex-1 min-h-[70px] pt-1">
                 <textarea 
@@ -764,7 +876,7 @@ export default function POSPage() {
               <span className="text-3xl font-black text-indigo-600 tracking-tighter">{formatCurrency(grandTotal)}</span>
             </div>
 
-            {paymentMethod === 'CASH' && changeDue > 0 && (
+            {['CASH', 'SPLIT'].includes(paymentMethod) && changeDue > 0 && (
               <div className="flex justify-between items-center mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm">
                 <span className="text-emerald-800 font-bold text-xs">Change Due</span>
                 <span className="text-xl font-black text-emerald-600">{formatCurrency(changeDue)}</span>

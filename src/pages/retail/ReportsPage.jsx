@@ -25,7 +25,7 @@ const REPORT_CARDS = [
   { id: 'inventory', label: 'Inventory Report', desc: 'Branch-wise stock levels', icon: Package, color: 'violet' },
   { id: 'top-products', label: 'Top Products', desc: 'Best-selling items', icon: BarChart3, color: 'amber' },
   { id: 'low-stock', label: 'Low Stock Alert', desc: 'Below minimum levels', icon: AlertTriangle, color: 'rose' },
-  { id: 'dead-stock', label: 'Dead Stock', desc: 'No sales in 90 days', icon: Skull, color: 'slate' },
+  { id: 'dead-stock', label: 'Dead Stock', desc: 'No sales in specified days', icon: Skull, color: 'slate' },
   { id: 'branch-sales', label: 'Branch Sales', desc: 'Compare branch performance', icon: MapPin, color: 'indigo' },
   { id: 'employee-sales', label: 'Employee Sales', desc: 'Performance by employee', icon: Users, color: 'sky' },
   { id: 'supplier-purchases', label: 'Supplier Purchases', desc: 'Purchases by supplier', icon: Truck, color: 'cyan' },

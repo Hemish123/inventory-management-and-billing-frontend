@@ -116,7 +116,7 @@ export default function RetailDashboard() {
   const [lowStock, setLowStock] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  if (user?.role_name === 'EMPLOYEE') {
+  if (['EMPLOYEE', 'USER'].includes(user?.role_name)) {
     return <Navigate to="/pos" replace />;
   }
 

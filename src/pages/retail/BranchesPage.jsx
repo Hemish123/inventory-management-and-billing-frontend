@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 
 export default function BranchesPage() {
   const { user } = useAuth();
-  const isEmployee = user?.role_name === 'EMPLOYEE';
+  const isEmployee = ['EMPLOYEE', 'USER'].includes(user?.role_name);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);

@@ -5,97 +5,464 @@ import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
-import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, createCategory, getBrands, createBrand, getProductStock, uploadProductsPDF } from '../../api/productsAPI';
+import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, createBrand, getProductStock, uploadProductsPDF, getBrands } from '../../api/productsAPI';
 import { getSuppliers, createSupplier } from '../../api/productsAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { formatCurrency } from '../../utils/formatters';
-import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer, Upload, FileUp, X, Check, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, Trash2, Pencil, Package, AlertTriangle, ScanLine, Info, Printer, Upload, FileUp, X, Check, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Barcode from 'react-barcode';
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import JsBarcode from 'jsbarcode';
 
-/*
- * ── Sticker-sheet size configurations — NJ MPL series ──
- * All dimensions in mm. Margins center the grid on A4 (210 × 297 mm).
- *   pageMarginLeft = (210 - cols*labelW - (cols-1)*gapX) / 2
- *   pageMarginTop  = (297 - rows*labelH - (rows-1)*gapY) / 2
- *
- * Fine-tune pageMarginTop / pageMarginLeft / gapX / gapY after a test print.
- */
-const STICKER_CONFIGS = {
-  l48: {
-    // Grid: 4×48 + 3×2 = 198mm wide → margin = (210-198)/2 = 6
-    // Grid: 12×24 + 11×0.25 = 290.75mm tall → margin = (297-290.75)/2 = 3.125
-    cols: 4, rows: 12, labelW: 48, labelH: 24, gapX: 2, gapY: 0.25,
-    pageMarginTop: 3.125,
-    pageMarginLeft: 6,
-    // Label internals (mm)
-    padTop: 0.5, padBottom: 0.5, padLeft: 1.5, padRight: 1.5,
-    barcodeW: 38, barcodeH: 8,
-    companyFont: 5.5, companyBoxH: 3.5,
-    digitsFont: 5.5, digitsBoxH: 3,
-    nameFont: 5.5, priceFont: 8, bottomRowH: 5,
-    showCompany: true, showName: true, showPrice: true,
-    layout: 'vertical',
-    pdfScale: 3,
-  },
-  l16: {
-    // Grid: 2×99 + 1×2 = 200mm wide → margin = (210-200)/2 = 5
-    // Grid: 8×34 + 7×1.28 = 280.96mm tall → margin = (297-280.96)/2 = 8.02
-    cols: 2, rows: 8, labelW: 99, labelH: 34, gapX: 2, gapY: 1.28,
-    pageMarginTop: 8.02,
-    pageMarginLeft: 5,
-    padTop: 1.5, padBottom: 1.5, padLeft: 2, padRight: 2,
-    leftColW: 48, rightColW: 45,
-    barcodeW: 46, barcodeH: 14,
-    digitsFont: 7, digitsBoxH: 4,
-    companyFont: 5.5, companyBoxH: 5,
-    nameFont: 8, nameBoxH: 9, // 2 lines
-    priceFont: 14, priceBoxH: 8,
-    showCompany: true, showName: true, showPrice: true,
-    layout: 'horizontal',
-    pdfScale: 3,
-  },
-  l40: {
-    // Grid: 10×18 + 9×1 = 189mm wide → margin = (210-189)/2 = 10.5
-    // Grid: 4×73 + 3×1 = 295mm tall → margin = (297-295)/2 = 1
-    cols: 10, rows: 4, labelW: 18, labelH: 73, gapX: 1, gapY: 1,
-    pageMarginTop: 1,
-    pageMarginLeft: 10.5,
-    barcodeW: 48, barcodeH: 4.5,
-    companyFont: 5,
-    digitsFont: 5,
-    nameFont: 5, priceFont: 7,
-    showCompany: true, showName: true, showPrice: true,
-    layout: 'rotated',
-    pdfScale: 4,
-  },
-  l110: {
-    // Grid: 5×35 + 4×2 = 183mm wide → margin = (210-183)/2 = 13.5
-    // Grid: 22×10 + 21×2.5 = 272.5mm tall → margin = (297-272.5)/2 = 12.25
-    cols: 5, rows: 22, labelW: 35, labelH: 10, gapX: 2, gapY: 2.5,
-    pageMarginTop: 12.25,
-    pageMarginLeft: 13.5,
-    barcodeW: 19, barcodeH: 2,
-    digitsFont: 3,
-    companyFont: 3.5,
-    nameFont: 3.5,
-    priceFont: 5,
-    showCompany: true, showName: true, showPrice: true,
-    layout: 'tiny',
-    pdfScale: 4,
-  },
+/* ═══════════════════════════════════════════════════════════════════
+ * Thermal label roll engine — TSC TA220 · 203 dpi · 2-up · 50×25 mm
+ * Single source of truth, everything in millimetres.
+ * ═══════════════════════════════════════════════════════════════════ */
+
+const DOT = 0.125;               // 1 dot @ 203 dpi = 0.125 mm
+const PT = 25.4 / 72;            // 1 pt in mm
+const BASELINE = 0.77;           // baseline factor inside em box
+const MIN_FONT = 5;              // pt, general minimum
+const MIN_NUM_FONT = 4.5;        // pt, for number line
+const MIN_MODULE = 0.25;         // 2 dots minimum module width
+
+const DEFAULT_ROLL = {
+  cols: 2, labelW: 50, labelH: 25, gapX: 0,
+  mediaW: 100, offsetX: 0, offsetY: 0,
+  padX: 2, padY: 1.5, startRight: false,
 };
 
-/* Decide barcode format: CODE128C for all-digit even-length, else CODE128 */
-function barcodeFormat(val) {
-  return /^\d+$/.test(val) && val.length % 2 === 0 ? 'CODE128C' : 'CODE128';
+const ROLL_STORAGE_KEY = 'thermalRoll_v1';
+
+/** Snap a value to the 0.125 mm dot grid. */
+const snap = (v) => Math.round(v / DOT) * DOT;
+
+/** Load saved roll settings from localStorage, merging with defaults. */
+function loadRollSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ROLL_STORAGE_KEY));
+    if (saved && typeof saved === 'object') {
+      return {
+        ...DEFAULT_ROLL,
+        mediaW: saved.mediaW ?? DEFAULT_ROLL.mediaW,
+        gapX: saved.gapX ?? DEFAULT_ROLL.gapX,
+        offsetX: saved.offsetX ?? DEFAULT_ROLL.offsetX,
+        offsetY: saved.offsetY ?? DEFAULT_ROLL.offsetY,
+        startRight: !!saved.startRight,
+      };
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_ROLL };
 }
+
+/** Save editable settings to localStorage. */
+function saveRollSettings(cfg) {
+  try {
+    localStorage.setItem(ROLL_STORAGE_KEY, JSON.stringify({
+      mediaW: cfg.mediaW,
+      gapX: cfg.gapX,
+      offsetX: cfg.offsetX,
+      offsetY: cfg.offsetY,
+      startRight: cfg.startRight,
+    }));
+  } catch { /* ignore */ }
+}
+
+/* ───────────── geometry & validation ───────────── */
+
+function getRollGeometry(cfg) {
+  const usedW = cfg.cols * cfg.labelW + (cfg.cols - 1) * cfg.gapX;
+  const leftMargin = snap((cfg.mediaW - usedW) / 2);
+  return { usedW, leftMargin };
+}
+
+/** Returns positions for label index i (0 or 1) within a row. */
+function getLabelPos(cfg, geo, i) {
+  const x = snap(geo.leftMargin + cfg.offsetX + i * (cfg.labelW + cfg.gapX));
+  const y = snap(cfg.offsetY);
+  return { x, y };
+}
+
+/** Validate roll config. Returns array of problem strings. */
+function validateRoll(cfg) {
+  const problems = [];
+  const geo = getRollGeometry(cfg);
+  if (geo.usedW > cfg.mediaW) problems.push(`Labels + gap (${geo.usedW.toFixed(2)} mm) exceed media width (${cfg.mediaW} mm).`);
+  if (cfg.mediaW > 108) problems.push(`Media width ${cfg.mediaW} mm exceeds the TSC TA220 max print width of 108 mm.`);
+  const pos0 = getLabelPos(cfg, geo, 0);
+  if (pos0.x < 0) problems.push(`Left label starts at ${pos0.x.toFixed(3)} mm — off the left edge.`);
+  const pos1 = getLabelPos(cfg, geo, 1);
+  const rightEdge = pos1.x + cfg.labelW;
+  if (rightEdge > cfg.mediaW) problems.push(`Right label ends at ${rightEdge.toFixed(3)} mm — past media width ${cfg.mediaW} mm.`);
+  if (cfg.offsetY < 0 || cfg.offsetY > 3) problems.push(`Shift down must be 0–3 mm (currently ${cfg.offsetY} mm).`);
+  if (cfg.padX < 1) problems.push(`Horizontal padding must be at least 1 mm (currently ${cfg.padX} mm).`);
+  if (cfg.padY < 1) problems.push(`Vertical padding must be at least 1 mm (currently ${cfg.padY} mm).`);
+  return problems;
+}
+
+/* ───────────── barcode encoding (vector) ───────────── */
+
+function detectFormat(v) {
+  if (/^\d{12}$/.test(v)) return 'UPC';
+  if (/^\d{13}$/.test(v)) return 'EAN13';
+  if (/^\d{8}$/.test(v)) return 'EAN8';
+  return 'CODE128';
+}
+
+const barCache = new Map();
+
+/** Returns the barcode as a string of 1/0 modules. */
+function getBarcodeBinary(value) {
+  if (barCache.has(value)) return barCache.get(value);
+  let binary = null;
+  for (const format of [detectFormat(value), 'CODE128']) {
+    try {
+      const out = {};
+      JsBarcode(out, value, { format, displayValue: false, margin: 0 });
+      binary = out.encodings.map((e) => e.data).join('');
+      if (binary) break;
+    } catch (e) {
+      /* invalid checksum etc. -> try next format */
+    }
+  }
+  if (!binary) throw new Error(`Cannot encode barcode "${value}"`);
+  barCache.set(value, binary);
+  return binary;
+}
+
+/* ───────────── text fitting ───────────── */
+
+function wrapText(pdf, text, maxW, maxLines) {
+  const lines = [];
+  let cur = '';
+  const flush = () => { if (cur) lines.push(cur); cur = ''; };
+  for (const word of String(text).split(/\s+/).filter(Boolean)) {
+    let w = word;
+    while (w.length > 1 && pdf.getTextWidth(w) > maxW) {
+      let cut = w.length - 1;
+      while (cut > 1 && pdf.getTextWidth(w.slice(0, cut)) > maxW) cut--;
+      flush();
+      lines.push(w.slice(0, cut));
+      w = w.slice(cut);
+    }
+    const test = cur ? `${cur} ${w}` : w;
+    if (pdf.getTextWidth(test) <= maxW) cur = test;
+    else { flush(); cur = w; }
+  }
+  flush();
+  return lines.length <= maxLines ? lines : null;
+}
+
+function ellipsize(pdf, text, maxW, maxLines) {
+  const all = wrapText(pdf, text, maxW, Infinity);
+  const out = all.slice(0, maxLines);
+  if (all.length > maxLines && out.length) {
+    let last = out[out.length - 1];
+    while (last.length > 1 && pdf.getTextWidth(`${last}...`) > maxW) last = last.slice(0, -1);
+    out[out.length - 1] = `${last}...`;
+  }
+  return out;
+}
+
+/** Largest font (<= startSize) at which text fits in maxW within maxLines. */
+function fitLines(pdf, text, maxW, startSize, minSize, maxLines, style) {
+  pdf.setFont('helvetica', style);
+  const str = String(text ?? '').trim();
+  for (let s = startSize; s >= minSize - 1e-6; s -= 0.25) {
+    pdf.setFontSize(s);
+    const lines = wrapText(pdf, str, maxW, maxLines);
+    if (lines) return { lines, size: s };
+  }
+  pdf.setFontSize(minSize);
+  return { lines: ellipsize(pdf, str, maxW, maxLines), size: minSize };
+}
+
+function formatPrice(v) {
+  const n = Number(v);
+  if (!n || Number.isNaN(n)) return '';
+  return `Rs.${Number.isInteger(n) ? n : n.toFixed(2).replace(/\.?0+$/, '')}`;
+}
+
+/* ───────────── thermal label layout (inside safe area) ───────────── */
+
+/**
+ * Build a layout plan for one label.
+ * Company name, product name + price, barcode, number — vertically centred.
+ * Simplify if bars would be too short: 2-line→1-line name, drop company, drop name.
+ */
+function buildThermalPlan(pdf, p, companyName, safeW, safeH, opts) {
+  const { showCompany, nameLines } = opts;
+  const rows = [];
+  const gap = 0.8;
+
+  // Company
+  if (showCompany && companyName) {
+    const f = fitLines(pdf, companyName, safeW, 7, MIN_FONT, 1, 'bold');
+    rows.push({ type: 'company', ...f, h: f.lines.length * f.size * PT });
+  }
+
+  // Name + Price
+  if (opts.showName) {
+    const price = formatPrice(p.selling_price);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    const priceW = price ? pdf.getTextWidth(price) : 0;
+    const nameW = safeW - (price ? priceW + 1 : 0);
+    const f = fitLines(pdf, p.name, nameW, 8, MIN_FONT, nameLines, 'bold');
+    const priceH = price ? 10 * PT : 0;
+    rows.push({
+      type: 'name', ...f, price, priceSize: 10,
+      h: Math.max(f.lines.length * f.size * PT, priceH),
+    });
+  } else if (opts.showPrice) {
+    // Price only (name dropped)
+    const price = formatPrice(p.selling_price);
+    if (price) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      rows.push({ type: 'price-only', lines: [price], size: 10, h: 10 * PT });
+    }
+  }
+
+  // Number line
+  const num = fitLines(pdf, String(p.barcode).trim(), safeW, 6, MIN_NUM_FONT, 1, 'normal');
+  const numH = num.size * PT;
+  const numGap = Math.min(gap, 0.6);
+
+  const fixedH = rows.reduce((s, r) => s + r.h, 0) + rows.length * gap + numGap + numH;
+  const barMaxH = 11;
+  const barMinH = 8;
+  const barH = Math.max(0, Math.min(barMaxH, safeH - fixedH));
+  const startY = Math.max(0, (safeH - (fixedH + barH)) / 2);
+
+  return { rows, num, numH, numGap, barH, barMinH, startY, gap };
+}
+
+function planThermalLabel(pdf, p, companyName, safeW, safeH) {
+  const hasName = !!String(p.name || '').trim();
+  const attempts = [
+    { showCompany: true, showName: hasName, showPrice: true, nameLines: 2 },
+    { showCompany: true, showName: hasName, showPrice: true, nameLines: 1 },
+    { showCompany: false, showName: hasName, showPrice: true, nameLines: 1 },
+    { showCompany: false, showName: false, showPrice: true, nameLines: 0 },
+  ];
+  let plan;
+  for (const a of attempts) {
+    plan = buildThermalPlan(pdf, p, companyName, safeW, safeH, a);
+    if (plan.barH >= plan.barMinH) break;
+  }
+  return plan;
+}
+
+/** Draw a single label's content inside its safe area. */
+function drawThermalLabel(pdf, p, plan, safeX, safeY, safeW, warnings) {
+  let y = safeY + plan.startY;
+  pdf.setTextColor(0, 0, 0);
+
+  for (const r of plan.rows) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(r.size);
+    const lh = r.size * PT;
+    r.lines.forEach((ln, i) => {
+      const by = y + i * lh + lh * BASELINE;
+      if (r.type === 'company') {
+        pdf.text(ln, safeX + safeW / 2, by, { align: 'center' });
+      } else if (r.type === 'price-only') {
+        pdf.text(ln, safeX + safeW / 2, by, { align: 'center' });
+      } else {
+        pdf.text(ln, safeX, by);
+      }
+    });
+    if (r.type === 'name' && r.price) {
+      pdf.setFontSize(r.priceSize);
+      pdf.text(r.price, safeX + safeW, y + r.priceSize * PT * BASELINE, { align: 'right' });
+    }
+    y += r.h + plan.gap;
+  }
+
+  // Barcode bars (vector)
+  const barcodeStr = String(p.barcode).trim();
+  const binary = getBarcodeBinary(barcodeStr);
+  const quietZone = 2;
+  const availBarW = Math.min(40, safeW - 2 * quietZone);
+  let module = Math.floor((availBarW / binary.length) / DOT) * DOT;
+  if (module < MIN_MODULE) {
+    warnings.add(`Barcode ${barcodeStr}: module width ${(availBarW / binary.length).toFixed(4)} mm is below ${MIN_MODULE} mm minimum. Barcode may not scan.`);
+    module = MIN_MODULE;
+  }
+  if (plan.barH < plan.barMinH - 1e-6) {
+    warnings.add(`Some labels are crowded; barcode height was reduced.`);
+  }
+
+  const totalBarW = binary.length * module;
+  const barStartX = snap(safeX + (safeW - totalBarW) / 2);
+  const barStartY = snap(y);
+
+  pdf.setFillColor(0, 0, 0);
+  for (let i = 0; i < binary.length;) {
+    if (binary[i] === '1') {
+      let j = i;
+      while (j < binary.length && binary[j] === '1') j++;
+      const rx = snap(barStartX + i * module);
+      const rw = snap((j - i) * module);
+      pdf.rect(rx, barStartY, rw, plan.barH, 'F');
+      i = j;
+    } else i++;
+  }
+  y = barStartY + plan.barH + plan.numGap;
+
+  // Human-readable number
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(plan.num.size);
+  pdf.text(plan.num.lines[0] || '', safeX + safeW / 2, y + plan.num.size * PT * BASELINE, { align: 'center' });
+}
+
+/* ───────────── PDF generators ───────────── */
+
+/**
+ * Generate barcode label PDF for thermal 2-across roll.
+ * items: [{ name, barcode, selling_price }] already expanded by quantity.
+ */
+function generateThermalPDF({ items, companyName = '', rollCfg }) {
+  const cfg = { ...DEFAULT_ROLL, ...rollCfg };
+  const geo = getRollGeometry(cfg);
+  const safeW = cfg.labelW - 2 * cfg.padX;   // 46 mm
+  const safeH = cfg.labelH - 2 * cfg.padY;   // 22 mm
+
+  const pdf = new jsPDF({
+    unit: 'mm',
+    format: [cfg.mediaW, cfg.labelH],
+    orientation: 'landscape',
+    compress: true,
+  });
+
+  const warnings = new Set();
+  const planCache = new Map();
+  const cols = cfg.cols;
+
+  // Determine slot list: if startRight, first slot is index 1 (right)
+  const slots = [];
+  if (cfg.startRight && items.length > 0) {
+    slots.push({ itemIdx: -1, col: 0 }); // blank left slot on page 1
+  }
+  items.forEach((_, i) => slots.push({ itemIdx: i, col: -1 }));
+
+  // Assign cols
+  slots.forEach((s, si) => {
+    if (s.col === -1) s.col = si % cols;
+  });
+
+  // Group into rows (pages)
+  const pages = [];
+  for (let i = 0; i < slots.length; i += cols) {
+    pages.push(slots.slice(i, i + cols));
+  }
+
+  pages.forEach((row, pageIdx) => {
+    if (pageIdx > 0) pdf.addPage([cfg.mediaW, cfg.labelH], 'landscape');
+
+    row.forEach((slot) => {
+      if (slot.itemIdx < 0) return; // blank slot
+      const p = items[slot.itemIdx];
+      const pos = getLabelPos(cfg, geo, slot.col);
+
+      // Clip to label rectangle
+      pdf.saveGraphicsState();
+      pdf.rect(pos.x, pos.y, cfg.labelW, cfg.labelH);
+      pdf.clip();
+      pdf.discardPath();
+
+      // Plan & draw
+      const key = `${p.name}|${p.selling_price}|${p.barcode}`;
+      if (!planCache.has(key)) {
+        planCache.set(key, planThermalLabel(pdf, p, companyName, safeW, safeH));
+      }
+      const plan = planCache.get(key);
+      const safeX = pos.x + cfg.padX;
+      const safeY = pos.y + cfg.padY;
+      drawThermalLabel(pdf, p, plan, safeX, safeY, safeW, warnings);
+
+      pdf.restoreGraphicsState();
+    });
+  });
+
+  return { pdf, pages: pdf.getNumberOfPages(), warnings: [...warnings] };
+}
+
+/**
+ * Generate test label PDF: one page with outlines, crosshairs, rulers, L/R labels.
+ */
+function generateTestLabelPDF(rollCfg) {
+  const cfg = { ...DEFAULT_ROLL, ...rollCfg };
+  const geo = getRollGeometry(cfg);
+
+  const pdf = new jsPDF({
+    unit: 'mm',
+    format: [cfg.mediaW, cfg.labelH],
+    orientation: 'landscape',
+    compress: true,
+  });
+
+  for (let col = 0; col < cfg.cols; col++) {
+    const pos = getLabelPos(cfg, geo, col);
+    const { x, y } = pos;
+    const lw = cfg.labelW;
+    const lh = cfg.labelH;
+
+    // Label outline (solid black 0.25 mm)
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.25);
+    pdf.rect(x, y, lw, lh);
+
+    // Safe area outline (dashed 0.125 mm)
+    pdf.setLineWidth(0.125);
+    pdf.setLineDashPattern([1, 0.5], 0);
+    const sx = x + cfg.padX;
+    const sy = y + cfg.padY;
+    const sw = lw - 2 * cfg.padX;
+    const sh = lh - 2 * cfg.padY;
+    pdf.rect(sx, sy, sw, sh);
+    pdf.setLineDashPattern([], 0);
+
+    // Centre crosshair
+    const cx = x + lw / 2;
+    const cy = y + lh / 2;
+    pdf.setLineWidth(0.125);
+    pdf.line(cx - 3, cy, cx + 3, cy);
+    pdf.line(cx, cy - 3, cx, cy + 3);
+
+    // L or R letter at top-left of safe area
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    pdf.text(col === 0 ? 'L' : 'R', sx + 0.5, sy + 2.5);
+
+    // 40 mm ruler centred horizontally, at y = cy + 4 (below crosshair)
+    const rulerLen = 40;
+    const rulerY = cy + 4;
+    const rulerX = cx - rulerLen / 2;
+    pdf.setLineWidth(0.2);
+    pdf.line(rulerX, rulerY, rulerX + rulerLen, rulerY);
+    // End ticks (1.5 mm tall)
+    pdf.line(rulerX, rulerY - 0.75, rulerX, rulerY + 0.75);
+    pdf.line(rulerX + rulerLen, rulerY - 0.75, rulerX + rulerLen, rulerY + 0.75);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(5);
+    pdf.text('40 mm', cx, rulerY - 1, { align: 'center' });
+
+    // Size text near the bottom of safe area
+    pdf.setFontSize(5);
+    pdf.text(`${lw} × ${lh} mm`, cx, sy + sh - 1, { align: 'center' });
+  }
+
+  return pdf;
+}
+
+/* ───────────── Products page ───────────── */
 
 export default function ProductsPage() {
   const { user } = useAuth();
-  const isEmployee = user?.role_name === 'EMPLOYEE';
+  const isEmployee = ['EMPLOYEE', 'USER'].includes(user?.role_name);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -113,9 +480,9 @@ export default function ProductsPage() {
   const [barcodeModal, setBarcodeModal] = useState({ isOpen: false, product: null });
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printCounts, setPrintCounts] = useState({});
-  const [barcodeSize, setBarcodeSize] = useState('l48'); // 'l40' | 'l16' | 'l110' | 'l48'
   const [printing, setPrinting] = useState(false);
-  const [showCutGuides, setShowCutGuides] = useState(false);
+  const [showRollSettings, setShowRollSettings] = useState(false);
+  const [rollCfg, setRollCfg] = useState(loadRollSettings);
 
   // PDF Upload State
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -260,96 +627,132 @@ export default function ProductsPage() {
 
     const initialCounts = {};
     validProducts.forEach(p => {
-      initialCounts[p.id] = 1;
+      initialCounts[p.id] = '1';
     });
     setPrintCounts(initialCounts);
+    setRollCfg(loadRollSettings());
     setShowPrintModal(true);
   };
 
-  /* ── PDF generation ── */
-  const generatePDF = async () => {
-    setPrinting(true);
+  /* ───────────── Thermal roll printing helpers ───────────── */
+
+  const updateRollField = (field, raw) => {
+    setRollCfg(prev => {
+      const val = raw === '' ? (field === 'startRight' ? false : 0) : (field === 'startRight' ? !!raw : snap(parseFloat(raw) || 0));
+      const next = { ...prev, [field]: val };
+      saveRollSettings(next);
+      return next;
+    });
+  };
+
+  const printList = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
+  const qtyOf = (id) => Math.max(1, Math.min(1000, parseInt(printCounts[id], 10) || 1));
+  const totalLabels = printList.reduce((s, p) => s + qtyOf(p.id), 0);
+  const totalRows = totalLabels > 0 ? Math.ceil((totalLabels + (rollCfg.startRight ? 1 : 0)) / rollCfg.cols) : 0;
+  const rollProblems = validateRoll(rollCfg);
+
+  const directPrintPDF = (pdf) => {
     try {
-      const cfg = STICKER_CONFIGS[barcodeSize] || STICKER_CONFIGS.l48;
+      pdf.autoPrint();
+    } catch (_) {}
+    const blob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
 
-      // Wait for fonts and a short render tick
-      await document.fonts.ready;
-      await new Promise(r => setTimeout(r, 400));
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0.01';
+    iframe.style.pointerEvents = 'none';
+    iframe.src = blobUrl;
+    document.body.appendChild(iframe);
 
-      const container = pagesContainerRef.current;
-      if (!container) throw new Error('Print container not found');
-
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-
-      if (cfg.layout === 'rotated') {
-        /* ── L40 special path: capture each horizontal label, rotate 90°, compose onto pages ── */
-        const sourceEls = container.querySelectorAll('.l40-source');
-        if (sourceEls.length === 0) throw new Error('No L40 labels found');
-
-        // Capture each label individually (horizontal 73×18mm)
-        const rotatedImages = [];
-        for (const srcEl of sourceEls) {
-          const c = await html2canvas(srcEl, {
-            scale: cfg.pdfScale,
-            backgroundColor: '#ffffff',
-            useCORS: true, logging: false, scrollY: 0,
-            windowWidth: srcEl.scrollWidth,
-            windowHeight: srcEl.scrollHeight,
-          });
-          // Rotate canvas 90° clockwise: (w×h) → (h×w)
-          const rc = document.createElement('canvas');
-          rc.width = c.height;
-          rc.height = c.width;
-          const ctx = rc.getContext('2d');
-          ctx.translate(rc.width, 0);
-          ctx.rotate(Math.PI / 2);
-          ctx.drawImage(c, 0, 0);
-          rotatedImages.push(rc.toDataURL('image/png'));
-        }
-
-        // Compose rotated images onto PDF pages in a grid
-        const { cols, rows, labelW, labelH, gapX, gapY, pageMarginTop, pageMarginLeft } = cfg;
-        const perPage = cols * rows;
-        const totalPdfPages = Math.ceil(rotatedImages.length / perPage);
-
-        for (let pg = 0; pg < totalPdfPages; pg++) {
-          if (pg > 0) pdf.addPage();
-          for (let i = 0; i < perPage; i++) {
-            const idx = pg * perPage + i;
-            if (idx >= rotatedImages.length) break;
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const x = pageMarginLeft + col * (labelW + gapX);
-            const y = pageMarginTop + row * (labelH + gapY);
-            pdf.addImage(rotatedImages[idx], 'PNG', x, y, labelW, labelH);
-          }
-        }
-      } else {
-        /* ── Standard path: capture each page as a whole ── */
-        const pageEls = container.querySelectorAll('.label-page');
-        if (pageEls.length === 0) throw new Error('No pages to print');
-
-        for (let i = 0; i < pageEls.length; i++) {
-          const canvas = await html2canvas(pageEls[i], {
-            scale: cfg.pdfScale,
-            backgroundColor: '#ffffff',
-            useCORS: true, logging: false, scrollY: 0,
-            windowWidth: pageEls[i].scrollWidth,
-            windowHeight: pageEls[i].scrollHeight,
-          });
-          const imgData = canvas.toDataURL('image/png');
-          if (i > 0) pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+    let printed = false;
+    const triggerPrint = () => {
+      if (printed) return;
+      printed = true;
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.warn('Iframe print failed, falling back to window:', err);
+        const win = window.open(blobUrl, '_blank');
+        if (win) {
+          win.focus();
+          setTimeout(() => {
+            try { win.print(); } catch (_) {}
+          }, 500);
         }
       }
+      setTimeout(() => {
+        try {
+          if (iframe.parentNode) document.body.removeChild(iframe);
+          URL.revokeObjectURL(blobUrl);
+        } catch (_) {}
+      }, 60000);
+    };
 
-      pdf.save(`barcodes_${Date.now()}.pdf`);
-      setPrinting(false);
-      setShowPrintModal(false);
+    iframe.onload = () => {
+      setTimeout(triggerPrint, 300);
+    };
+
+    // Fallback if onload doesn't fire
+    setTimeout(triggerPrint, 1200);
+  };
+
+  const getPrintItems = () => {
+    const items = [];
+    printList.forEach(p => {
+      const q = qtyOf(p.id);
+      for (let i = 0; i < q; i++)
+        items.push({ name: p.name, barcode: p.barcode, selling_price: p.selling_price });
+    });
+    return items;
+  };
+
+  const generatePDF = () => {
+    setPrinting(true);
+    try {
+      const items = getPrintItems();
+      const { pdf, warnings } = generateThermalPDF({
+        items, companyName: user?.company_name || '', rollCfg,
+      });
+      if (warnings.length) toast(warnings.join('\n'), { icon: '⚠️', duration: 6000 });
+
+      directPrintPDF(pdf);
     } catch (err) {
       console.error('PDF generation error:', err);
-      toast.error('Failed to generate PDF');
+      toast.error(err.message || 'Failed to print labels');
+    } finally {
       setPrinting(false);
+    }
+  };
+
+  const downloadPDF = () => {
+    try {
+      const items = getPrintItems();
+      const { pdf, warnings } = generateThermalPDF({
+        items, companyName: user?.company_name || '', rollCfg,
+      });
+      if (warnings.length) toast(warnings.join('\n'), { icon: '⚠️', duration: 6000 });
+
+      pdf.save(`labels_2up_50x25_${Date.now()}.pdf`);
+      toast.success('Labels PDF downloaded');
+    } catch (err) {
+      console.error('PDF download error:', err);
+      toast.error(err.message || 'Failed to download PDF');
+    }
+  };
+
+  const printTestLabel = () => {
+    try {
+      const pdf = generateTestLabelPDF(rollCfg);
+      directPrintPDF(pdf);
+    } catch (err) {
+      toast.error(err.message || 'Failed to print test label');
     }
   };
 
@@ -416,231 +819,7 @@ export default function ProductsPage() {
     },
   ];
 
-  /* ── Build duplicated label list and page data ── */
-  const cfg = STICKER_CONFIGS[barcodeSize] || STICKER_CONFIGS.l48;
-  const perPage = cfg.cols * cfg.rows;
-  const companyName = user?.company_name || '';
-  const ff = 'Arial, Helvetica, sans-serif';
-  const border = showCutGuides ? '1px dashed #cbd5e1' : 'none';
 
-  const printProducts = products.filter(p => selectedProducts.includes(p.id) && p.barcode);
-  const duplicatedProducts = [];
-  printProducts.forEach(p => {
-    const count = printCounts[p.id] || 1;
-    for (let i = 0; i < count; i++) {
-      duplicatedProducts.push({ ...p, _printId: `${p.id}-${i}` });
-    }
-  });
-  const totalPages = Math.ceil(duplicatedProducts.length / perPage) || 1;
-
-  /* ── SVG barcode component with exact mm sizing ── */
-  let barcodeIdx = 0;
-  const SizedBarcode = ({ value, widthMM, heightMM }) => {
-    const fmt = barcodeFormat(value);
-    const cls = `bc-${widthMM}-${heightMM}-${barcodeIdx++}`.replace(/\./g, '_');
-    return (
-      <div className={cls} style={{ width: `${widthMM}mm`, height: `${heightMM}mm`, overflow: 'hidden', lineHeight: 0, flexShrink: 0 }}>
-        <Barcode
-          value={value}
-          format={fmt}
-          renderer="svg"
-          displayValue={false}
-          margin={0}
-          width={2}
-          height={100}
-          background="transparent"
-        />
-        <style>{`
-          .${cls} > svg {
-            width: ${widthMM}mm !important;
-            height: ${heightMM}mm !important;
-          }
-        `}</style>
-      </div>
-    );
-  };
-
-  /* ── Per-layout label renderers ── */
-  const renderLabelL48 = (p) => (
-    <div key={p._printId} style={{
-      width: `${cfg.labelW}mm`, height: `${cfg.labelH}mm`, boxSizing: 'border-box',
-      border, overflow: 'hidden', backgroundColor: '#fff',
-      padding: `${cfg.padTop}mm ${cfg.padRight}mm ${cfg.padBottom}mm ${cfg.padLeft}mm`,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
-    }}>
-      {/* Company */}
-      {cfg.showCompany && companyName && (
-        <div style={{ width: '100%', minHeight: `${cfg.companyBoxH}mm`, maxHeight: `${cfg.companyBoxH}mm`, fontSize: `${cfg.companyFont}pt`,
-          fontWeight: 'bold', textTransform: 'uppercase', color: '#000', fontFamily: ff,
-          lineHeight: `${cfg.companyBoxH}mm`, overflow: 'visible', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center',
-          flexShrink: 0,
-        }}>{companyName}</div>
-      )}
-      {/* Barcode */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
-      </div>
-      {/* Digits */}
-      <div style={{ width: '100%', minHeight: `${cfg.digitsBoxH}mm`, fontSize: `${cfg.digitsFont}pt`,
-        color: '#000', fontFamily: ff, lineHeight: `${cfg.digitsBoxH}mm`, textAlign: 'center',
-        flexShrink: 0,
-      }}>{p.barcode}</div>
-      {/* Name + Price row */}
-      <div style={{ width: '100%', minHeight: `${cfg.bottomRowH}mm`, maxHeight: `${cfg.bottomRowH}mm`, display: 'flex', alignItems: 'center', gap: '1mm', flexShrink: 0 }}>
-        {cfg.showName && (
-          <div style={{ flex: 1, minWidth: 0, fontSize: `${cfg.nameFont}pt`, fontWeight: 'bold',
-            color: '#000', fontFamily: ff, lineHeight: `${cfg.bottomRowH}mm`,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }} title={p.name}>{p.name}</div>
-        )}
-        {cfg.showPrice && (
-          <div style={{ flexShrink: 0, fontSize: `${cfg.priceFont}pt`, fontWeight: 900,
-            color: '#000', fontFamily: ff, lineHeight: `${cfg.bottomRowH}mm`, whiteSpace: 'nowrap',
-          }}>{formatCurrency(p.selling_price)}</div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderLabelL16 = (p) => (
-    <div key={p._printId} style={{
-      width: `${cfg.labelW}mm`, height: `${cfg.labelH}mm`, boxSizing: 'border-box',
-      border, overflow: 'hidden', backgroundColor: '#fff',
-      padding: `${cfg.padTop}mm ${cfg.padRight}mm ${cfg.padBottom}mm ${cfg.padLeft}mm`,
-      display: 'flex', flexDirection: 'column',
-    }}>
-      {/* TOP ROW: company name — full width */}
-      {cfg.showCompany && companyName && (
-        <div style={{ width: '100%', minHeight: `${cfg.companyBoxH}mm`, maxHeight: `${cfg.companyBoxH}mm`,
-          fontSize: `${cfg.companyFont}pt`, fontWeight: 'bold', textTransform: 'uppercase', color: '#000',
-          fontFamily: ff, lineHeight: `${cfg.companyBoxH}mm`, overflow: 'hidden', textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap', flexShrink: 0, textAlign: 'left',
-        }}>{companyName}</div>
-      )}
-      {/* BOTTOM SECTION: barcode+digits left, name+price right */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '2mm', minHeight: 0 }}>
-        {/* LEFT column: barcode + digits */}
-        <div style={{ width: `${cfg.leftColW}mm`, flexShrink: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-        }}>
-          <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
-          <div style={{ width: '100%', minHeight: `${cfg.digitsBoxH}mm`, fontSize: `${cfg.digitsFont}pt`,
-            color: '#000', fontFamily: ff, lineHeight: `${cfg.digitsBoxH}mm`, textAlign: 'center',
-            flexShrink: 0,
-          }}>{p.barcode}</div>
-        </div>
-        {/* RIGHT column: name, price */}
-        <div style={{ width: `${cfg.rightColW}mm`, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
-          justifyContent: 'center', gap: '0.5mm',
-        }}>
-          {cfg.showName && (
-            <div style={{ minHeight: `${cfg.nameBoxH}mm`, maxHeight: `${cfg.nameBoxH}mm`, fontSize: `${cfg.nameFont}pt`,
-              fontWeight: 'bold', color: '#000', fontFamily: ff, lineHeight: 1.3,
-              overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-              flexShrink: 0,
-            }} title={p.name}>{p.name}</div>
-          )}
-          {cfg.showPrice && (
-            <div style={{ minHeight: `${cfg.priceBoxH}mm`, fontSize: `${cfg.priceFont}pt`,
-              fontWeight: 900, color: '#000', fontFamily: ff, lineHeight: `${cfg.priceBoxH}mm`,
-              display: 'flex', alignItems: 'center', flexShrink: 0,
-            }}>{formatCurrency(p.selling_price)}</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  /* L40: rendered HORIZONTALLY (73mm wide × 18mm tall), then canvas is rotated 90° in generatePDF.
-   * Pure absolute positioning with NO height and NO overflow:hidden to prevent html2canvas from 
-   * arbitrarily clipping ascenders/descenders on tight bounding boxes. */
-  const renderLabelL40 = (p) => (
-    <div key={p._printId} className="l40-source" style={{
-      width: `${cfg.labelH}mm`, height: `${cfg.labelW}mm`, boxSizing: 'border-box',
-      border, overflow: 'hidden', backgroundColor: '#fff', position: 'relative'
-    }}>
-      {/* Company */}
-      {cfg.showCompany && companyName && (
-        <div style={{ position: 'absolute', top: '0.5mm', left: '2mm', right: '2mm',
-          fontSize: `${cfg.companyFont}pt`, fontWeight: 'bold', textTransform: 'uppercase',
-          color: '#000', fontFamily: ff, textAlign: 'center', whiteSpace: 'nowrap'
-        }}>{companyName}</div>
-      )}
-
-      {/* Barcode — pushed down to 5mm for clear gap from company name */}
-      <div style={{ position: 'absolute', top: '5mm', left: '0', right: '0',
-        display: 'flex', justifyContent: 'center'
-      }}>
-        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
-      </div>
-
-      {/* Digits */}
-      <div style={{ position: 'absolute', top: '10mm', left: '0', right: '0',
-        fontSize: `${cfg.digitsFont}pt`, color: '#000', fontFamily: ff, textAlign: 'center', whiteSpace: 'nowrap'
-      }}>{p.barcode}</div>
-
-      {/* Name */}
-      {cfg.showName && (
-        <div style={{ position: 'absolute', top: '13mm', left: '2mm', right: '16mm',
-          fontSize: `${cfg.nameFont}pt`, fontWeight: 'bold',
-          color: '#000', fontFamily: ff, whiteSpace: 'nowrap', textAlign: 'left'
-        }} title={p.name}>{p.name}</div>
-      )}
-
-      {/* Price */}
-      {cfg.showPrice && (
-        <div style={{ position: 'absolute', top: '13mm', right: '2mm',
-          fontSize: `${cfg.priceFont}pt`, fontWeight: 900, color: '#000',
-          fontFamily: ff, textAlign: 'right', whiteSpace: 'nowrap'
-        }}>{formatCurrency(p.selling_price)}</div>
-      )}
-    </div>
-  );
-
-  /* L110 (35×10mm): pure absolute positioning without overflow:hidden */
-  const renderLabelL110 = (p) => (
-    <div key={p._printId} style={{
-      width: `${cfg.labelW}mm`, height: `${cfg.labelH}mm`, boxSizing: 'border-box',
-      border, overflow: 'hidden', backgroundColor: '#fff', position: 'relative'
-    }}>
-      {/* Company Name */}
-      {cfg.showCompany && companyName && (
-        <div style={{ position: 'absolute', top: '0.3mm', left: '1mm', right: '1mm',
-          fontSize: `${cfg.companyFont}pt`, fontWeight: 'bold', color: '#000', fontFamily: ff,
-          textAlign: 'center', whiteSpace: 'nowrap'
-        }}>{companyName}</div>
-      )}
-      {/* Product name */}
-      {cfg.showName && (
-        <div style={{ position: 'absolute', top: '2mm', left: '1mm', right: '1mm',
-          fontSize: `${cfg.nameFont}pt`, fontWeight: 'bold', color: '#000', fontFamily: ff,
-          textAlign: 'center', whiteSpace: 'nowrap'
-        }}>{p.name}</div>
-      )}
-      {/* Barcode — gap from product name, shorter 2mm height */}
-      <div style={{ position: 'absolute', top: '4.5mm', left: '1mm', width: `${cfg.barcodeW}mm` }}>
-        <SizedBarcode value={p.barcode} widthMM={cfg.barcodeW} heightMM={cfg.barcodeH} />
-      </div>
-      {/* Digits */}
-      <div style={{ position: 'absolute', top: '6.8mm', left: '1mm', width: `${cfg.barcodeW}mm`,
-        fontSize: `${cfg.digitsFont}pt`, color: '#000', fontFamily: ff, textAlign: 'center', whiteSpace: 'nowrap'
-      }}>{p.barcode}</div>
-      {/* Price */}
-      {cfg.showPrice && (
-        <div style={{ position: 'absolute', top: '5mm', right: '1mm',
-          fontSize: `${cfg.priceFont}pt`, fontWeight: 900, color: '#000', fontFamily: ff,
-          textAlign: 'right', whiteSpace: 'nowrap'
-        }}>{formatCurrency(p.selling_price)}</div>
-      )}
-    </div>
-  );
-
-  const renderLabel = (p) => {
-    if (cfg.layout === 'horizontal') return renderLabelL16(p);
-    if (cfg.layout === 'rotated') return renderLabelL40(p);
-    if (cfg.layout === 'tiny') return renderLabelL110(p);
-    return renderLabelL48(p);
-  };
 
   return (
     <div className="flex-1 overflow-y-auto relative">
@@ -812,9 +991,9 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <label className="text-xs font-medium text-slate-500">Stock Branch</label>
-                    <select 
-                      value={form.initial_stock_branch} 
-                      onChange={e => setForm({ ...form, initial_stock_branch: e.target.value })} 
+                    <select
+                      value={form.initial_stock_branch}
+                      onChange={e => setForm({ ...form, initial_stock_branch: e.target.value })}
                       className="input-field mt-1"
                     >
                       {branches.map(b => (
@@ -890,45 +1069,48 @@ export default function ProductsPage() {
         </Modal>
       )}
 
-      {/* Print Configuration Modal */}
+      {/* ═══════ Thermal Roll Print Configuration Modal ═══════ */}
       {showPrintModal && (
         <Modal title="Configure Barcode Printing" onClose={() => !printing && setShowPrintModal(false)}>
-          <div className="p-4 space-y-5">
-            {/* Sticker Sheet Format Selector — 2×2 grid */}
-            <div>
-              <h4 className="text-sm font-bold text-slate-700 mb-3">Sticker Sheet Format</h4>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { key: 'l48',  shortLabel: '48L',  size: '48 × 24 mm',  count: '48 labels / page' },
-                  { key: 'l16',  shortLabel: '16L',  size: '99 × 34 mm',  count: '16 labels / page' },
-                  { key: 'l40',  shortLabel: '40P',  size: '18 × 73 mm',  count: '40 labels / page' },
-                  { key: 'l110', shortLabel: '110L', size: '35 × 10 mm',  count: '110 labels / page' },
-                ].map(s => (
-                  <button key={s.key} onClick={() => setBarcodeSize(s.key)} disabled={printing}
-                    className={`p-3 rounded-xl border-2 transition-all text-left ${barcodeSize === s.key
-                        ? 'border-indigo-600 bg-indigo-50 shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'
-                      }`}>
-                    <span className={`font-bold text-sm ${barcodeSize === s.key ? 'text-indigo-700' : 'text-slate-700'}`}>{s.shortLabel}</span>
-                    <p className={`text-xs font-semibold mt-0.5 ${barcodeSize === s.key ? 'text-indigo-600' : 'text-slate-500'}`}>{s.size}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{s.count}</p>
-                  </button>
-                ))}
-              </div>
+          <div className="p-4 space-y-4">
+
+            {/* 1. Info card */}
+            <div className="bg-indigo-50 p-3 rounded-xl space-y-1">
+              <p className="text-sm font-bold text-indigo-800">Thermal roll: {rollCfg.cols} labels across</p>
+              <p className="text-xs text-indigo-600">
+                {rollCfg.labelW} × {rollCfg.labelH} mm each · {rollCfg.gapX} mm gap · TSC TA220 (203 dpi)
+              </p>
             </div>
 
-            {/* Cut guides checkbox */}
+            {/* 2. Start-right checkbox */}
             <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={showCutGuides} onChange={e => setShowCutGuides(e.target.checked)}
+              <input type="checkbox" checked={rollCfg.startRight}
+                onChange={e => updateRollField('startRight', e.target.checked)}
                 className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" disabled={printing} />
-              <span className="text-sm text-slate-600">Show cut guides (for plain-paper test)</span>
+              <span className="text-sm text-slate-600">First label goes on the RIGHT side (finish a half-used row)</span>
             </label>
 
-            {/* Product Quantities */}
+            {/* 3. Amber printer note */}
+            <div className="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-700 flex items-start gap-2">
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Printer: <b>TSC TA220</b>. Paper size = <b>{rollCfg.mediaW} × {rollCfg.labelH} mm</b> (gap labels),
+                Scale <b>100% / Actual size</b>, Margins <b>None</b>. Print the test label first.
+              </span>
+            </div>
+
+            {/* 4. Red validation problems */}
+            {rollProblems.length > 0 && (
+              <div className="bg-rose-50 p-2.5 rounded-lg text-xs text-rose-700 space-y-1">
+                {rollProblems.map((m, i) => <p key={i}>⚠ {m}</p>)}
+              </div>
+            )}
+
+            {/* 5. Product Quantities */}
             <div>
               <h4 className="text-sm font-bold text-slate-700 mb-2">Product Quantities</h4>
-              <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-2">
-                {products.filter(p => selectedProducts.includes(p.id) && p.barcode).map(product => (
+              <div className="max-h-[32vh] overflow-y-auto space-y-2 pr-2">
+                {printList.map(product => (
                   <div key={product.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-xl bg-slate-50">
                     <div className="flex-1 min-w-0 pr-4">
                       <p className="font-semibold text-slate-800 text-sm truncate">{product.name}</p>
@@ -940,8 +1122,9 @@ export default function ProductsPage() {
                         type="number"
                         min="1"
                         max="1000"
-                        value={printCounts[product.id] || 1}
-                        onChange={(e) => setPrintCounts({ ...printCounts, [product.id]: parseInt(e.target.value) || 1 })}
+                        value={printCounts[product.id] ?? '1'}
+                        onChange={(e) => setPrintCounts({ ...printCounts, [product.id]: e.target.value })}
+                        onBlur={() => setPrintCounts(prev => ({ ...prev, [product.id]: String(qtyOf(product.id)) }))}
                         className="input-field w-20 text-center font-semibold"
                         disabled={printing}
                       />
@@ -949,62 +1132,111 @@ export default function ProductsPage() {
                   </div>
                 ))}
               </div>
+
+              {/* 6. Live summary */}
+              <p className="text-xs text-slate-500 mt-2">
+                Total labels: <b>{totalLabels}</b> → <b>{totalRows}</b> row{totalRows !== 1 ? 's' : ''} (pages) of {rollCfg.cols} labels
+                {rollCfg.startRight && totalLabels > 0 && <span className="text-amber-600 ml-1">· first left slot left blank</span>}
+              </p>
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowPrintModal(false)}
-                className="btn-secondary px-4 py-2"
-                disabled={printing}
-              >
-                Cancel
+            {/* 7. Collapsible Roll Settings */}
+            <div className="border border-slate-200 rounded-xl">
+              <button type="button" onClick={() => setShowRollSettings(v => !v)}
+                className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-600 flex items-center justify-between">
+                <span>{showRollSettings ? '▾' : '▸'} Roll settings</span>
+                <button type="button" className="text-[10px] text-indigo-600 hover:underline"
+                  onClick={(e) => { e.stopPropagation(); setRollCfg({ ...DEFAULT_ROLL }); saveRollSettings(DEFAULT_ROLL); toast.success('Roll settings reset to defaults.'); }}>
+                  Reset roll settings
+                </button>
               </button>
-              <button
-                onClick={generatePDF}
-                disabled={printing}
-                className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
-              >
-                <Printer className="w-4 h-4" />
-                {printing ? 'Generating PDF...' : 'Generate PDF'}
-              </button>
+              {showRollSettings && (
+                <div className="p-3 pt-0 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-medium text-slate-500">Backing paper width (mm)</label>
+                      <input type="number" step="0.125" min="50" max="120"
+                        value={rollCfg.mediaW}
+                        onChange={e => updateRollField('mediaW', e.target.value)}
+                        className="input-field mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-slate-500">Gap between left and right label (mm)</label>
+                      <input type="number" step="0.125" min="0" max="10"
+                        value={rollCfg.gapX}
+                        onChange={e => updateRollField('gapX', e.target.value)}
+                        className="input-field mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-slate-500">Shift right (mm, negative = left)</label>
+                      <input type="number" step="0.125"
+                        value={rollCfg.offsetX}
+                        onChange={e => updateRollField('offsetX', e.target.value)}
+                        className="input-field mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-slate-500">Shift down (mm, 0 to 3)</label>
+                      <input type="number" step="0.125" min="0" max="3"
+                        value={rollCfg.offsetY}
+                        onChange={e => updateRollField('offsetY', e.target.value)}
+                        className="input-field mt-1" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Measure the full backing paper width and enter it above. The printer's paper size must be set to
+                    that width × {rollCfg.labelH} mm. Use the shift fields if the test label sits off the stickers.
+                    Values snap to 0.125 mm (one printer dot).
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* 8. Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={printTestLabel}
+                  className="btn-secondary px-3 py-2 text-xs"
+                  disabled={printing}
+                >
+                  Print Test Label
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadPDF}
+                  disabled={printing || totalLabels === 0 || rollProblems.length > 0}
+                  className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5 text-slate-600 hover:text-slate-900"
+                  title="Save PDF file to disk"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Save PDF
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(false)}
+                  className="btn-secondary px-4 py-2"
+                  disabled={printing}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={generatePDF}
+                  disabled={printing || totalLabels === 0 || rollProblems.length > 0}
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                >
+                  <Printer className="w-4 h-4" />
+                  {printing ? 'Opening Print...' : 'Print Labels'}
+                </button>
+              </div>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Hidden container for label rendering */}
-      <div style={{ position: 'fixed', top: 0, left: '-9999px', zIndex: -1 }} ref={pagesContainerRef}>
-        {cfg.layout === 'rotated' ? (
-          /* L40: render each label HORIZONTALLY (73×18mm) as individual divs.
-           * generatePDF captures each, rotates 90°, and composes onto pages. */
-          duplicatedProducts.map(p => renderLabel(p))
-        ) : (
-          /* Other layouts: render as page grids for full-page capture */
-          Array.from({ length: totalPages }).map((_, pageIndex) => {
-            const pageItems = duplicatedProducts.slice(pageIndex * perPage, (pageIndex + 1) * perPage);
-            return (
-              <div key={`page-${pageIndex}`} className="label-page" style={{
-                width: '210mm', height: '297mm', position: 'relative',
-                overflow: 'hidden', boxSizing: 'border-box', backgroundColor: '#fff',
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  left: `${cfg.pageMarginLeft}mm`,
-                  top: `${cfg.pageMarginTop}mm`,
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${cfg.cols}, ${cfg.labelW}mm)`,
-                  gridTemplateRows: `repeat(${cfg.rows}, ${cfg.labelH}mm)`,
-                  columnGap: `${cfg.gapX}mm`,
-                  rowGap: `${cfg.gapY}mm`,
-                }}>
-                  {pageItems.map(p => renderLabel(p))}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+
 
       {/* PDF Upload Modal */}
       {showUploadModal && (

@@ -17,6 +17,7 @@ const StockPage = lazy(() => import('./pages/retail/StockPage'));
 const BranchesPage = lazy(() => import('./pages/retail/BranchesPage'));
 const PurchasesPage = lazy(() => import('./pages/retail/PurchasesPage'));
 const SuppliersPage = lazy(() => import('./pages/retail/SuppliersPage'));
+const ExpensesPage = lazy(() => import('./pages/retail/ExpensesPage'));
 const StockTransfersPage = lazy(() => import('./pages/retail/StockTransfersPage'));
 const ReportsPage = lazy(() => import('./pages/retail/ReportsPage'));
 const UsersPage = lazy(() => import('./pages/Users'));
@@ -29,7 +30,7 @@ function PrivateRoute({ children }) {
 function RoleBasedRedirect() {
   const { user, isAuthenticated } = useSelector((s) => s.auth);
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (user?.role_name === 'EMPLOYEE') return <Navigate to="/pos" replace />;
+  if (['EMPLOYEE', 'USER'].includes(user?.role_name)) return <Navigate to="/pos" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/stock" element={<PrivateRoute><AppLayout><StockPage /></AppLayout></PrivateRoute>} />
           <Route path="/stock-transfers" element={<PrivateRoute><AppLayout><StockTransfersPage /></AppLayout></PrivateRoute>} />
           <Route path="/purchases" element={<PrivateRoute><AppLayout><PurchasesPage /></AppLayout></PrivateRoute>} />
+          <Route path="/expenses" element={<PrivateRoute><AppLayout><ExpensesPage /></AppLayout></PrivateRoute>} />
           <Route path="/suppliers" element={<PrivateRoute><AppLayout><SuppliersPage /></AppLayout></PrivateRoute>} />
           <Route path="/branches" element={<PrivateRoute><AppLayout><BranchesPage /></AppLayout></PrivateRoute>} />
           <Route path="/reports" element={<PrivateRoute><AppLayout><ReportsPage /></AppLayout></PrivateRoute>} />

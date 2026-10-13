@@ -204,6 +204,7 @@ export default function Users() {
                 <select required value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
                   className="input-field mt-1">
                   <option value="EMPLOYEE">Employee</option>
+                  <option value="USER">User</option>
                   <option value="SALES">Sales</option>
                   <option value="ADMIN">Admin</option>
                 </select>

@@ -5,7 +5,7 @@ import {
   Users, Settings, LogOut, Menu, X, ChevronRight,
   Package, ChevronDown, Box, Truck,
   ScanLine, LayoutDashboard,
-  MapPin, ArrowUpFromLine, Receipt, BarChart3, ArrowLeftRight, Building2
+  MapPin, ArrowUpFromLine, Receipt, BarChart3, ArrowLeftRight, Building2, Wallet
 } from 'lucide-react';
 import { APP_NAME } from '../../utils/constants';
 
@@ -16,6 +16,7 @@ const navItems = [
   { path: '/suppliers', label: 'Suppliers', icon: Building2 },
   { path: '/products', label: 'Products', icon: Box },
   { path: '/purchases', label: 'Purchases', icon: Truck },
+  { path: '/expenses', label: 'Expenses', icon: Wallet },
   { path: '/bills', label: 'Bills', icon: Receipt },
   { path: '/stock', label: 'Stock Movements', icon: ArrowUpFromLine },
   { path: '/stock-transfers', label: 'Stock Transfers', icon: ArrowLeftRight },
@@ -128,8 +129,8 @@ export default function Sidebar() {
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
         {navItems
           .filter(item => {
-            if (user?.role_name === 'EMPLOYEE') {
-              const hiddenForEmployee = ['/dashboard', '/suppliers', '/products', '/purchases', '/reports', '/users'];
+            if (['EMPLOYEE', 'USER'].includes(user?.role_name)) {
+              const hiddenForEmployee = ['/dashboard', '/suppliers', '/products', '/purchases', '/expenses', '/reports', '/users'];
               return !hiddenForEmployee.includes(item.path);
             }
             return true;
@@ -137,7 +138,7 @@ export default function Sidebar() {
           .map(renderNavItem)}
 
         {/* Settings */}
-        {user?.role_name !== 'EMPLOYEE' && (
+        {!['EMPLOYEE', 'USER'].includes(user?.role_name) && (
           <div className="pt-2">
             {renderNavItem({ path: '/settings', label: 'Settings', icon: Settings })}
           </div>

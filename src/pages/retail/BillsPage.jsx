@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/common/Navbar';
+import Modal from '../../components/common/Modal';
 import Table from '../../components/common/Table';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { getBills, voidBill, deleteBill } from '../../api/billingAPI';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { Search, XCircle, FileText, PlayCircle, Pencil, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Search, Info, XCircle, FileText, PlayCircle, Pencil, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function BillsPage() {
@@ -14,6 +15,7 @@ export default function BillsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [selectedBillForBreakdown, setSelectedBillForBreakdown] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => { loadBills(); }, [page]);
@@ -64,8 +66,17 @@ export default function BillsPage() {
       <span className="text-xs text-slate-500 font-medium">{v}</span>
     ) : <span className="text-slate-300">—</span> },
     { key: 'grand_total', label: 'Total', sortable: true, render: v => formatCurrency(v) },
-    { key: 'payment_method', label: 'Payment', sortable: true, render: v => (
-      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{v}</span>
+    { key: 'payment_method', label: 'Payment', sortable: true, render: (v, row) => (
+      v === 'SPLIT' ? (
+        <div className="flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-slate-100 text-slate-600">{v}</span>
+          <button onClick={() => setSelectedBillForBreakdown(row)} className="text-slate-400 hover:text-indigo-600 transition-colors outline-none flex items-center justify-center">
+            <Info className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-slate-100 text-slate-600">{v}</span>
+      )
     )},
     { key: 'status', label: 'Status', sortable: true, render: v => (
       <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
@@ -132,6 +143,39 @@ export default function BillsPage() {
           </div>
         )}
       </div>
+
+      {/* Payment Breakdown Modal */}
+      {selectedBillForBreakdown && (
+        <Modal title={`Payment Breakdown: ${selectedBillForBreakdown.bill_number}`} onClose={() => setSelectedBillForBreakdown(null)}>
+          <div className="p-6">
+            <div className="border-b border-slate-100 pb-2 mb-4 flex justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <span>Payment Method</span>
+              <span>Amount</span>
+            </div>
+            <div className="space-y-4">
+              {selectedBillForBreakdown.payments?.length > 0 ? (
+                selectedBillForBreakdown.payments.map(p => (
+                  <div key={p.id} className="flex justify-between items-center">
+                    <span className="text-slate-700 font-medium">{p.payment_method}</span>
+                    <span className="text-indigo-600 font-bold">{formatCurrency(p.amount)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-sm text-slate-400 py-2">No breakdown details available.</div>
+              )}
+            </div>
+            <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center bg-slate-50 p-4 rounded-xl shadow-inner">
+              <span className="font-bold text-slate-800">Total Amount</span>
+              <span className="font-bold text-indigo-600 text-lg">{formatCurrency(selectedBillForBreakdown.grand_total)}</span>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button onClick={() => setSelectedBillForBreakdown(null)} className="px-5 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

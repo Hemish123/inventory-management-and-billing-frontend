@@ -20,7 +20,7 @@ export const useAuth = () => {
     dispatch(setCredentials(data.data));
     toast.success('Login successful!');
     if (!data.data.reactivated) {
-      if (data.data.user?.role_name === 'EMPLOYEE') {
+      if (['EMPLOYEE', 'USER'].includes(data.data.user?.role_name)) {
         navigate('/pos');
       } else {
         navigate('/dashboard');
