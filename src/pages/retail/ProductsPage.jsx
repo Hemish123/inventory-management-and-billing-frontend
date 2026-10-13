@@ -196,9 +196,9 @@ function buildThermalPlan(pdf, p, companyName, safeW, safeH, opts) {
   const rows = [];
   const gap = 0.8;
 
-  // Company
+  // Company (compact font size to fit neatly)
   if (showCompany && companyName) {
-    const f = fitLines(pdf, companyName, safeW, 7, MIN_FONT, 1, 'bold');
+    const f = fitLines(pdf, companyName, safeW, 5.5, 4.5, 1, 'bold');
     rows.push({ type: 'company', ...f, h: f.lines.length * f.size * PT });
   }
 
@@ -651,56 +651,19 @@ export default function ProductsPage() {
   const totalRows = totalLabels > 0 ? Math.ceil((totalLabels + (rollCfg.startRight ? 1 : 0)) / rollCfg.cols) : 0;
   const rollProblems = validateRoll(rollCfg);
 
-  const directPrintPDF = (pdf) => {
-    try {
-      pdf.autoPrint();
-    } catch (_) {}
+  const openPDFPreview = (pdf) => {
     const blob = pdf.output('blob');
     const blobUrl = URL.createObjectURL(blob);
-
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '1px';
-    iframe.style.height = '1px';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0.01';
-    iframe.style.pointerEvents = 'none';
-    iframe.src = blobUrl;
-    document.body.appendChild(iframe);
-
-    let printed = false;
-    const triggerPrint = () => {
-      if (printed) return;
-      printed = true;
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch (err) {
-        console.warn('Iframe print failed, falling back to window:', err);
-        const win = window.open(blobUrl, '_blank');
-        if (win) {
-          win.focus();
-          setTimeout(() => {
-            try { win.print(); } catch (_) {}
-          }, 500);
-        }
-      }
-      setTimeout(() => {
-        try {
-          if (iframe.parentNode) document.body.removeChild(iframe);
-          URL.revokeObjectURL(blobUrl);
-        } catch (_) {}
-      }, 60000);
-    };
-
-    iframe.onload = () => {
-      setTimeout(triggerPrint, 300);
-    };
-
-    // Fallback if onload doesn't fire
-    setTimeout(triggerPrint, 1200);
+    const win = window.open(blobUrl, '_blank');
+    if (!win) {
+      // Fallback if browser blocked window.open popup
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   const getPrintItems = () => {
@@ -717,15 +680,20 @@ export default function ProductsPage() {
     setPrinting(true);
     try {
       const items = getPrintItems();
+      if (!items.length) {
+        toast.error('No items to print');
+        return;
+      }
       const { pdf, warnings } = generateThermalPDF({
         items, companyName: user?.company_name || '', rollCfg,
       });
       if (warnings.length) toast(warnings.join('\n'), { icon: '⚠️', duration: 6000 });
 
-      directPrintPDF(pdf);
+      openPDFPreview(pdf);
+      toast.success('Labels PDF opened! You can print or download from the tab.');
     } catch (err) {
       console.error('PDF generation error:', err);
-      toast.error(err.message || 'Failed to print labels');
+      toast.error(err.message || 'Failed to generate labels');
     } finally {
       setPrinting(false);
     }
@@ -750,9 +718,10 @@ export default function ProductsPage() {
   const printTestLabel = () => {
     try {
       const pdf = generateTestLabelPDF(rollCfg);
-      directPrintPDF(pdf);
+      openPDFPreview(pdf);
+      toast.success('Test label PDF opened in preview tab');
     } catch (err) {
-      toast.error(err.message || 'Failed to print test label');
+      toast.error(err.message || 'Failed to generate test label');
     }
   };
 
@@ -1228,7 +1197,7 @@ export default function ProductsPage() {
                   className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20 disabled:opacity-50"
                 >
                   <Printer className="w-4 h-4" />
-                  {printing ? 'Opening Print...' : 'Print Labels'}
+                  {printing ? 'Generating PDF...' : 'Print Labels'}
                 </button>
               </div>
             </div>
