@@ -5,7 +5,7 @@ import Modal from '../../components/common/Modal';
 import Table from '../../components/common/Table';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { getBills, voidBill, deleteBill } from '../../api/billingAPI';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
 import { Search, Info, XCircle, FileText, PlayCircle, Pencil, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -84,7 +84,7 @@ export default function BillsPage() {
         v === 'VOID' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'
       }`}>{v === 'HOLD' ? 'DRAFT' : v}</span>
     )},
-    { key: 'billing_date', label: 'Date', sortable: true, render: v => formatDate(v) },
+    { key: 'billing_date', label: 'Date & Time', sortable: true, render: v => formatDateTime(v) },
     { key: 'actions', label: '', render: (_, row) => (
       <div className="flex gap-2 justify-end">
         {row.status === 'HOLD' && (

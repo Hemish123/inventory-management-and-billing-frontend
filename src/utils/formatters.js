@@ -30,6 +30,24 @@ export const formatDate = (dateStr) => {
   }
 };
 
+export const formatDateTime = (dateStr) => {
+  if (!dateStr) return '—';
+  try {
+    const d = typeof dateStr === 'string' ? parseISO(dateStr) : dateStr;
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(d);
+  } catch {
+    return dateStr;
+  }
+};
+
 export const formatDateShort = (dateStr) => {
   if (!dateStr) return '—';
   try {

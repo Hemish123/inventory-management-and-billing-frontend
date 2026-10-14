@@ -6,7 +6,7 @@ import { createBill, getDrafts, resumeDraft, discardDraft, finalizeBill, getBill
 import { getCustomerDropdown, createCustomer } from '../../api/customerAPI';
 import { getBranchDropdown } from '../../api/coreAPI';
 import { getSalesPersons } from '../../api/authAPI';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
 import toast from 'react-hot-toast';
 import {
   ScanLine, Plus, Minus, Trash2, ShoppingCart, CreditCard,
@@ -912,7 +912,7 @@ export default function POSPage() {
                         <span className="font-bold text-slate-800">{draft.bill_number}</span>
                         <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-bold rounded-md">{draft.status}</span>
                       </div>
-                      <p className="text-sm text-slate-500">{draft.customer_name} • {formatDate(draft.billing_date)}</p>
+                      <p className="text-sm text-slate-500">{draft.customer_name} • {formatDateTime(draft.billing_date)}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <p className="font-bold text-lg text-slate-800">{formatCurrency(draft.grand_total)}</p>
