@@ -553,17 +553,9 @@ export default function ProductsPage() {
     if (!payload.barcode) delete payload.barcode;
     if (payload.selling_price === '') delete payload.selling_price;
     if (payload.cost_price === '') delete payload.cost_price;
-    delete payload.supplier_name;
-
-    // Remove initial_stock and initial_stock_branch for edit requests (stock is managed separately)
-    if (editingId) {
-      delete payload.initial_stock;
-      delete payload.initial_stock_branch;
-    }
-    // Remove empty initial_stock to avoid sending 0 unnecessarily
-    if (!payload.initial_stock) {
-      delete payload.initial_stock;
-      delete payload.initial_stock_branch;
+    payload.initial_stock = payload.initial_stock === '' ? 0 : parseInt(payload.initial_stock, 10) || 0;
+    if (!payload.initial_stock_branch && branches.length > 0) {
+      payload.initial_stock_branch = branches[0].id;
     }
 
     const { data, error } = editingId
@@ -582,8 +574,32 @@ export default function ProductsPage() {
     } else toast.error(error || 'Failed');
   };
 
-  const handleEdit = (product) => {
+  const handleEdit = async (product) => {
     setEditingId(product.id);
+    let initialStock = product.initial_stock !== undefined && product.initial_stock !== null ? product.initial_stock : '';
+    let initialBranch = product.initial_stock_branch || '';
+
+    // If initialBranch is missing, fetch branch stocks to find assigned branch
+    if (!initialBranch) {
+      try {
+        const { data } = await getProductStock(product.id);
+        const stocks = data?.data || [];
+        if (stocks.length > 0) {
+          const sorted = [...stocks].sort((a, b) => (b.quantity || 0) - (a.quantity || 0));
+          initialBranch = sorted[0].branch;
+          if (initialStock === '' || initialStock === 0) {
+            initialStock = sorted[0].quantity;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch product stock for edit:', err);
+      }
+    }
+
+    if (!initialBranch && branches.length > 0) {
+      initialBranch = branches[0].id;
+    }
+
     setForm({
       name: product.name || '',
       sku: product.sku || '',
@@ -599,7 +615,9 @@ export default function ProductsPage() {
       tax_percentage: product.tax_percentage !== undefined ? product.tax_percentage : 0,
       minimum_stock_level: product.minimum_stock_level !== undefined ? product.minimum_stock_level : 0,
       reorder_level: product.reorder_level !== undefined ? product.reorder_level : 0,
-      dead_stock_days: product.dead_stock_days !== undefined ? product.dead_stock_days : 0
+      dead_stock_days: product.dead_stock_days !== undefined ? product.dead_stock_days : 0,
+      initial_stock: initialStock,
+      initial_stock_branch: initialBranch
     });
     setShowModal(true);
   };
@@ -764,7 +782,10 @@ export default function ProductsPage() {
               <Info className="w-4 h-4" />
             </button>
           </div>
-          <span className="text-[10px] text-slate-400">Min: {row.minimum_stock_level} | Reorder: {row.reorder_level}</span>
+          <span className="text-[10px] text-slate-400">
+            Min: {row.minimum_stock_level} | Reorder: {row.reorder_level}
+            {row.initial_stock_branch_name ? ` • ${row.initial_stock_branch_name}` : ''}
+          </span>
         </div>
       )
     },
@@ -949,29 +970,31 @@ export default function ProductsPage() {
                   className="input-field mt-1" />
                 <p className="text-[10px] text-slate-400 mt-0.5">No sale in these days = dead stock</p>
               </div>
-              {!editingId && (
-                <>
-                  <div>
-                    <label className="text-xs font-medium text-slate-500">Initial Stock (Opening)</label>
-                    <input type="number" min="0" value={form.initial_stock}
-                      onChange={e => setForm({ ...form, initial_stock: e.target.value })}
-                      placeholder="0"
-                      className="input-field mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-500">Stock Branch</label>
-                    <select
-                      value={form.initial_stock_branch}
-                      onChange={e => setForm({ ...form, initial_stock_branch: e.target.value })}
-                      className="input-field mt-1"
-                    >
-                      {branches.map(b => (
-                        <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="text-xs font-medium text-slate-500">Initial Stock (Opening)</label>
+                <input type="number" min="0" value={form.initial_stock}
+                  onChange={e => setForm({ ...form, initial_stock: e.target.value })}
+                  placeholder="0"
+                  className="input-field mt-1" />
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {editingId ? "Adjusting opening stock updates inventory" : "Opening quantity"}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Stock Branch</label>
+                <select
+                  value={form.initial_stock_branch}
+                  onChange={e => setForm({ ...form, initial_stock_branch: e.target.value })}
+                  className="input-field mt-1"
+                >
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {editingId ? "Changing branch moves initial stock" : "Assigned branch"}
+                </p>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => { setShowModal(false); setEditingId(null); setForm({ name: '', sku: '', barcode: '', description: '', category: '', brand: '', supplier_name: '', unit: 'Nos', cost_price: '', selling_price: '', hsn_code: '', tax_percentage: 0, minimum_stock_level: 0, reorder_level: 0, dead_stock_days: 0, initial_stock: '', initial_stock_branch: branches[0]?.id || '' }); }} className="btn-secondary px-4 py-2">Cancel</button>

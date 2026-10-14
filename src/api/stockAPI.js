@@ -20,6 +20,12 @@ export const getStockTransfers = (params = {}) =>
 export const createStockTransfer = (data) =>
   apiCall(() => api.post('/stock/transfers/create-transfer/', data));
 
+export const updateStockTransfer = (id, data) =>
+  apiCall(() => api.put(`/stock/transfers/${id}/`, data));
+
+export const deleteStockTransfer = (id) =>
+  apiCall(() => api.delete(`/stock/transfers/${id}/`));
+
 export const approveTransfer = (id) =>
   apiCall(() => api.post(`/stock/transfers/${id}/approve/`));
 

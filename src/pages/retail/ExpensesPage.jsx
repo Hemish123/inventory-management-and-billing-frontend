@@ -85,9 +85,9 @@ export default function ExpensesPage() {
     setShowModal(true);
   };
 
-  const handleDelete = async (e, id, billNo) => {
+  const handleDelete = async (e, id, label) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete expense "${billNo}"?`)) return;
+    if (!window.confirm(`Delete expense "${label || 'item'}"?`)) return;
     const { error } = await deleteExpense(id);
     if (error) toast.error(error); else { toast.success('Deleted'); loadData(); }
   };
@@ -105,8 +105,8 @@ export default function ExpensesPage() {
           <Wallet className="w-4 h-4 text-teal-500" />
         </div>
         <div>
-          <p className="font-medium text-slate-800 text-sm">Bill: {val}</p>
-          <p className="text-xs text-slate-400">{row.expense_type}</p>
+          <p className="font-medium text-slate-800 text-sm">{val ? `Bill: ${val}` : row.expense_type}</p>
+          <p className="text-xs text-slate-400">{val ? row.expense_type : 'No bill number'}</p>
         </div>
       </div>
     )},
@@ -128,7 +128,7 @@ export default function ExpensesPage() {
           className="p-1.5 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-full transition-colors">
           <Pencil className="w-4 h-4" />
         </button>
-        <button onClick={(e) => handleDelete(e, row.id, row.bill_no)}
+        <button onClick={(e) => handleDelete(e, row.id, row.bill_no || row.expense_type)}
           className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors">
           <Trash2 className="w-4 h-4" />
         </button>
@@ -180,8 +180,8 @@ export default function ExpensesPage() {
             
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-slate-500">Bill No *</label>
-                <input required value={form.bill_no} onChange={e => setForm({...form, bill_no: e.target.value})} className="input-field mt-1" placeholder="Enter Bill No" />
+                <label className="text-xs font-medium text-slate-500">Bill No (Optional)</label>
+                <input value={form.bill_no} onChange={e => setForm({...form, bill_no: e.target.value})} className="input-field mt-1" placeholder="Enter Bill No (Optional)" />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500">Expense Type *</label>
