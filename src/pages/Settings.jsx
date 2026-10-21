@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
-import { setUser } from '../store/authSlice';
+import { setUser, setTokens } from '../store/authSlice';
 import { useAuth } from '../hooks/useAuth';
-import { updateProfile } from '../api/authAPI';
+import { updateProfile, changePassword } from '../api/authAPI';
 import Navbar from '../components/common/Navbar';
 import Modal from '../components/common/Modal';
-import { User, Building2, Phone, Save, Loader2, Moon, Sun } from 'lucide-react';
+import { User, Building2, Phone, Save, Loader2, Moon, Sun, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Settings() {
@@ -29,6 +29,15 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'dark');
+
+  // Change / Reset Password state (no current password needed)
+  const [passwordForm, setPasswordForm] = useState({
+    new_password: '',
+    confirm_password: '',
+  });
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
 
   useEffect(() => {
     if (darkMode) {
@@ -71,6 +80,44 @@ export default function Settings() {
       setForm({ ...form, [e.target.name]: e.target.files[0] });
     } else {
       setForm({ ...form, [e.target.name]: e.target.value });
+    }
+  };
+
+  const onPasswordChange = (e) => {
+    setPasswordForm({ ...passwordForm, [e.target.name]: e.target.value });
+  };
+
+  const handleChangePassword = async () => {
+    const { new_password, confirm_password } = passwordForm;
+    if (!new_password || !confirm_password) {
+      toast.error('Both password fields are required');
+      return;
+    }
+    if (new_password.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    if (new_password !== confirm_password) {
+      toast.error('New password and confirm password do not match');
+      return;
+    }
+    setChangingPassword(true);
+    const { data, error } = await changePassword({
+      new_password,
+      confirm_password,
+    });
+    setChangingPassword(false);
+    if (error) {
+      toast.error(error);
+    } else {
+      toast.success('Password updated successfully!');
+      // Update tokens in store so user stays logged in
+      if (data?.data?.tokens) {
+        dispatch(setTokens(data.data.tokens));
+      }
+      setPasswordForm({ new_password: '', confirm_password: '' });
+      setShowNewPwd(false);
+      setShowConfirmPwd(false);
     }
   };
 
@@ -195,6 +242,65 @@ export default function Settings() {
             >
               <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${darkMode ? 'translate-x-7' : 'translate-x-1'}`} />
             </button>
+          </div>
+        </div>
+
+        {/* Change / Reset Password Section */}
+        <div className="glass-card p-6 animate-slide-up">
+          <h2 className="font-sora text-lg font-semibold text-slate-800 mb-2 flex items-center gap-2">
+            <Lock className="w-5 h-5 text-brand-500" /> Reset / Change Password
+          </h2>
+          <p className="text-sm text-slate-500 mb-4">
+            Forgot or want to change your password? Enter a new password below. You do not need your current password.
+          </p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block font-medium">New Password</label>
+                <div className="relative">
+                  <input
+                    name="new_password"
+                    type={showNewPwd ? 'text' : 'password'}
+                    value={passwordForm.new_password}
+                    onChange={onPasswordChange}
+                    placeholder="Min 6 characters"
+                    className="input-field pr-10"
+                  />
+                  <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block font-medium">Confirm New Password</label>
+                <div className="relative">
+                  <input
+                    name="confirm_password"
+                    type={showConfirmPwd ? 'text' : 'password'}
+                    value={passwordForm.confirm_password}
+                    onChange={onPasswordChange}
+                    placeholder="Re-enter new password"
+                    className="input-field pr-10"
+                  />
+                  <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            {passwordForm.new_password && passwordForm.confirm_password && passwordForm.new_password !== passwordForm.confirm_password && (
+              <p className="text-xs text-rose-500 font-medium">Passwords do not match</p>
+            )}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleChangePassword}
+                disabled={changingPassword || !passwordForm.new_password || !passwordForm.confirm_password}
+                className="btn-primary flex items-center gap-2"
+              >
+                {changingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                Set New Password
+              </button>
+            </div>
           </div>
         </div>
 

@@ -467,6 +467,7 @@ export default function POSPage() {
       setDiscountValue(bill.discount_type === 'PERCENTAGE' ? parseFloat(bill.discount_percentage) : parseFloat(bill.discount_amount));
       setNotes(bill.notes);
       setActiveDraftId(bill.id);
+      setSelectedSalesPerson(bill.salesperson_id ? String(bill.salesperson_id) : '');
       setShowDrafts(false);
       toast.success(`Resumed bill ${bill.bill_number}`);
       
@@ -501,6 +502,7 @@ export default function POSPage() {
       setNotes(bill.notes);
       setActiveEditId(bill.id);
       if (bill.branch) setSelectedBranch(bill.branch);
+      setSelectedSalesPerson(bill.salesperson_id ? String(bill.salesperson_id) : '');
       toast.success(`Editing bill ${bill.bill_number}`);
       
       barcodeRef.current?.focus();
@@ -533,7 +535,8 @@ export default function POSPage() {
     setShowPaymentOptions(false);
     setSubmitting(true);
     const payload = buildPayload(false);
-    payload.send_whatsapp = receiptType === 'WHATSAPP';
+    // Send WhatsApp if WHATSAPP is selected, or if Print PDF is selected and customer phone is available
+    payload.send_whatsapp = receiptType === 'WHATSAPP' || receiptType === 'PDF';
 
     let res;
     if (activeEditId) {
@@ -552,6 +555,9 @@ export default function POSPage() {
       setLastBill(res.data.data);
       
       if (receiptType === 'PDF') {
+        if (customerPhone) {
+          toast.success('WhatsApp receipt sending triggered!');
+        }
         try {
           const printUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/billing/${res.data.data.id}/pdf/`;
           const printToast = toast.loading("Preparing receipt...");
@@ -963,22 +969,24 @@ export default function POSPage() {
             <div className="grid grid-cols-2 gap-4">
               <button 
                 onClick={() => handleProcessPayment('PDF')}
-                className="flex flex-col items-center justify-center p-6 border-2 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 rounded-2xl transition-all group"
+                className="flex flex-col items-center justify-center p-6 border-2 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 rounded-2xl transition-all group text-center"
               >
                 <div className="w-16 h-16 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-4 transition-colors">
                   <Printer className="w-8 h-8 text-slate-500 group-hover:text-indigo-600" />
                 </div>
                 <span className="font-bold text-slate-700 group-hover:text-indigo-700">Print PDF</span>
+                <span className="text-xs text-slate-400 group-hover:text-indigo-600 mt-1 font-medium">Print + WhatsApp</span>
               </button>
               
               <button 
                 onClick={() => handleProcessPayment('WHATSAPP')}
-                className="flex flex-col items-center justify-center p-6 border-2 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-2xl transition-all group"
+                className="flex flex-col items-center justify-center p-6 border-2 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 rounded-2xl transition-all group text-center"
               >
                 <div className="w-16 h-16 rounded-full bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center mb-4 transition-colors">
                   <Smartphone className="w-8 h-8 text-slate-500 group-hover:text-emerald-600" />
                 </div>
                 <span className="font-bold text-slate-700 group-hover:text-emerald-700">WhatsApp Bill</span>
+                <span className="text-xs text-slate-400 group-hover:text-emerald-600 mt-1 font-medium">WhatsApp Only</span>
               </button>
             </div>
             {!customerPhone && (

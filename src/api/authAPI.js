@@ -39,3 +39,6 @@ export const deleteEmployee = (id) =>
 
 export const getSalesPersons = () =>
   apiCall(() => api.get('/auth/employees/', { params: { role: 'SALES' } }));
+
+export const changePassword = (data) =>
+  apiCall(() => api.post('/auth/change-password/', data));
