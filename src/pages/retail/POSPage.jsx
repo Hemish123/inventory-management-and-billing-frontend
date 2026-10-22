@@ -49,6 +49,7 @@ export default function POSPage() {
   const [splitCard, setSplitCard] = useState('');
   const [discountType, setDiscountType] = useState('NONE');
   const [discountValue, setDiscountValue] = useState(0);
+  const [manualRoundOff, setManualRoundOff] = useState('');
   const [notes, setNotes] = useState('');
   
   const [submitting, setSubmitting] = useState(false);
@@ -258,17 +259,78 @@ export default function POSPage() {
   const cartRef = useRef(cart);
   cartRef.current = cart;
 
+  // ── Global Barcode Scanner Detector ──
+  // Barcode scanners type all characters within ~50-80ms then press Enter.
+  // This listener captures that pattern at the document level, so scanning
+  // works even when the barcode input field is NOT focused.
+  const scanBufferRef = useRef('');
+  const scanTimerRef = useRef(null);
+  const SCAN_CHAR_TIMEOUT = 80; // max ms between characters for scanner input
+  const MIN_SCAN_LENGTH = 3;    // minimum barcode length to be valid
+
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'F1') { e.preventDefault(); barcodeRef.current?.focus(); }
-      if (e.key === 'F2') { e.preventDefault(); setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); }
-      if (e.key === 'F4') { e.preventDefault(); if (cartRef.current.length > 0 && holdBillRef.current) holdBillRef.current(); }
-      if (e.key === 'F7') { e.preventDefault(); setPaymentMethod('CASH'); }
-      if (e.key === 'F8') { e.preventDefault(); setPaymentMethod('UPI'); }
-      if (e.key === 'F9') { e.preventDefault(); if (cartRef.current.length > 0 && submitBillRef.current) submitBillRef.current(); }
+    const handleGlobalKeyDown = (e) => {
+      // Don't intercept if user is actively typing in a focused input/textarea/select
+      // (except the barcode input itself — that's handled by its own onKeyDown)
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const isBarcodeField = document.activeElement === barcodeRef.current;
+
+      if (e.key === 'F1') { e.preventDefault(); barcodeRef.current?.focus(); return; }
+      if (e.key === 'F2') { e.preventDefault(); setShowSearch(true); setTimeout(() => searchRef.current?.focus(), 100); return; }
+      if (e.key === 'F4') { e.preventDefault(); if (cartRef.current.length > 0 && holdBillRef.current) holdBillRef.current(); return; }
+      if (e.key === 'F7') { e.preventDefault(); setPaymentMethod('CASH'); return; }
+      if (e.key === 'F8') { e.preventDefault(); setPaymentMethod('UPI'); return; }
+      if (e.key === 'F9') { e.preventDefault(); if (cartRef.current.length > 0 && submitBillRef.current) submitBillRef.current(); return; }
+
+      // If user is focused on the barcode field, let the normal onKeyDown handler work
+      if (isBarcodeField) return;
+
+      // If user is typing in another input (customer name, phone, notes, etc.), skip
+      if (['input', 'textarea', 'select'].includes(tag)) return;
+
+      // --- Global scanner detection below ---
+      if (e.key === 'Enter') {
+        // Process accumulated buffer
+        const code = scanBufferRef.current.trim();
+        scanBufferRef.current = '';
+        clearTimeout(scanTimerRef.current);
+
+        if (code.length >= MIN_SCAN_LENGTH) {
+          e.preventDefault();
+          // This is a barcode scan! Process it.
+          barcodeLookup(code).then(({ data, error }) => {
+            if (data?.data) {
+              addToCartRef.current(data.data);
+            } else {
+              toast.error(error || 'Product not found');
+            }
+          }).catch(() => {
+            toast.error('Scanner error. Try again.');
+          }).finally(() => {
+            barcodeRef.current?.focus();
+          });
+        }
+        return;
+      }
+
+      // Accumulate printable single characters (scanner sends one char per keystroke)
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        clearTimeout(scanTimerRef.current);
+        scanBufferRef.current += e.key;
+
+        // Reset buffer if no new character arrives within SCAN_CHAR_TIMEOUT ms
+        // (human typing is much slower than a scanner)
+        scanTimerRef.current = setTimeout(() => {
+          scanBufferRef.current = '';
+        }, SCAN_CHAR_TIMEOUT);
+      }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+      clearTimeout(scanTimerRef.current);
+    };
   }, []); // Empty deps — refs always point to latest
 
   const updateQty = (idx, delta) => {
@@ -298,6 +360,7 @@ export default function POSPage() {
     setSplitUpi('');
     setSplitCard('');
     setDiscountValue(0);
+    setManualRoundOff('');
     setNotes('');
     setActiveDraftId(null);
     setActiveEditId(null);
@@ -337,8 +400,9 @@ export default function POSPage() {
   else if (discountType === 'FIXED') overallDisc = discountValue;
 
   const preRoundTotal = subtotal + taxTotal - overallDisc;
-  const grandTotal = Math.round(preRoundTotal);
-  const roundOff = grandTotal - preRoundTotal;
+  const roundOffVal = parseFloat(manualRoundOff) || 0;
+  const grandTotal = Math.max(0, preRoundTotal - roundOffVal);
+  const roundOff = -roundOffVal;
   
   const splitTotal = (parseFloat(splitCash)||0) + (parseFloat(splitUpi)||0) + (parseFloat(splitCard)||0);
   const actualAmountReceived = paymentMethod === 'SPLIT' ? splitTotal : (parseFloat(amountReceived) || grandTotal);
@@ -473,6 +537,7 @@ export default function POSPage() {
       setCustomerPhone(bill.customer_phone);
       setDiscountType(bill.discount_type || 'NONE');
       setDiscountValue(bill.discount_type === 'PERCENTAGE' ? parseFloat(bill.discount_percentage) : parseFloat(bill.discount_amount));
+      setManualRoundOff(parseFloat(bill.round_off || 0) !== 0 ? Math.abs(parseFloat(bill.round_off)).toString() : '');
       setNotes(bill.notes);
       setActiveDraftId(bill.id);
       setSelectedSalesPerson(bill.salesperson_id ? String(bill.salesperson_id) : '');
@@ -507,6 +572,7 @@ export default function POSPage() {
       setCustomerPhone(bill.customer_phone);
       setDiscountType(bill.discount_type || 'NONE');
       setDiscountValue(bill.discount_type === 'PERCENTAGE' ? parseFloat(bill.discount_percentage) : parseFloat(bill.discount_amount));
+      setManualRoundOff(parseFloat(bill.round_off || 0) !== 0 ? Math.abs(parseFloat(bill.round_off)).toString() : '');
       setNotes(bill.notes);
       setActiveEditId(bill.id);
       if (bill.branch) setSelectedBranch(bill.branch);
@@ -831,6 +897,15 @@ export default function POSPage() {
                 </div>
               </div>
 
+              {/* Round Off Row */}
+              <div className="bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-center justify-between gap-2 shadow-sm">
+                <span className="text-xs font-bold text-amber-800 whitespace-nowrap">Round Off</span>
+                <div className="flex items-center gap-1.5 flex-1">
+                  <span className="text-xs font-bold text-amber-600">−₹</span>
+                  <input type="number" value={manualRoundOff} onChange={e => setManualRoundOff(e.target.value)} className="flex-1 input-field bg-white py-1 text-xs px-2 border-amber-200 shadow-sm font-semibold text-right focus:border-amber-400" placeholder="0" min="0" step="0.01" />
+                </div>
+              </div>
+
               {/* Cash Received Row */}
               {paymentMethod === 'CASH' && (
                 <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-sm shrink-0">
@@ -882,7 +957,7 @@ export default function POSPage() {
               <div className="flex justify-between items-center"><span>Subtotal</span><span className="text-slate-800 font-semibold">{formatCurrency(subtotal)}</span></div>
               <div className="flex justify-between items-center"><span>Tax (GST)</span><span className="text-slate-800 font-semibold">{formatCurrency(taxTotal)}</span></div>
               {overallDisc > 0 && <div className="flex justify-between items-center text-rose-500"><span>Discount</span><span className="font-semibold">-{formatCurrency(overallDisc)}</span></div>}
-              {roundOff !== 0 && <div className="flex justify-between items-center"><span>Round Off</span><span className="text-slate-800 font-semibold">{roundOff > 0 ? '+' : ''}{roundOff.toFixed(2)}</span></div>}
+              {roundOffVal > 0 && <div className="flex justify-between items-center text-amber-600"><span>Round Off</span><span className="font-semibold">-{formatCurrency(roundOffVal)}</span></div>}
             </div>
             
             <div className="flex justify-between items-end mb-3 pt-2 border-t border-slate-200">

@@ -49,14 +49,16 @@ export default function Users() {
     e.preventDefault();
     setSubmitting(true);
     
-    // Auto-generate username from email if empty
     const payload = { ...form };
-    if (!payload.username) payload.username = payload.email || `sales_${Date.now()}`;
     if (!payload.assigned_branch) delete payload.assigned_branch;
 
     // For SALES role, email is optional
     if (isSalesRole && !payload.email) {
       delete payload.email;
+      if (!payload.username) payload.username = `sales_${Date.now()}`;
+    } else if (payload.email) {
+      payload.email = payload.email.trim();
+      payload.username = payload.email;
     }
 
     let data, error;
@@ -77,11 +79,12 @@ export default function Users() {
   };
 
   const handleEdit = (user) => {
+    const isPlaceholder = user.email?.endsWith('@placeholder.local');
     setForm({
       first_name: user.first_name || '',
       last_name: user.last_name || '',
-      email: user.email || '',
-      username: user.username || '',
+      email: isPlaceholder ? '' : (user.email || ''),
+      username: isPlaceholder ? '' : (user.username || ''),
       role: user.role_name || 'EMPLOYEE',
       phone: user.phone || '',
       assigned_branch: user.assigned_branch || '',
@@ -116,7 +119,9 @@ export default function Users() {
         </div>
         <div>
           <p className="font-medium text-slate-800 text-sm">{row.first_name} {row.last_name}</p>
-          <p className="text-xs text-slate-400">{row.email}</p>
+          <p className="text-xs text-slate-400">
+            {row.email?.endsWith('@placeholder.local') ? 'No email (Sales)' : row.email}
+          </p>
         </div>
       </div>
     )},
@@ -188,8 +193,7 @@ export default function Users() {
                   value={form.email} 
                   onChange={e => setForm({ ...form, email: e.target.value })}
                   className="input-field mt-1" 
-                  disabled={!!editId}
-                  placeholder={isSalesRole ? 'Not required for sales' : ''} />
+                  placeholder={isSalesRole ? 'Not required for sales' : 'user@example.com'} />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500">Phone</label>
