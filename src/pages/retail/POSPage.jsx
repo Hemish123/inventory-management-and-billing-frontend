@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import Navbar from '../../components/common/Navbar';
 import Modal from '../../components/common/Modal';
 import { barcodeLookup, getProductDropdown } from '../../api/productsAPI';
@@ -19,6 +20,7 @@ const PAYMENT_ICONS = {
 };
 
 export default function POSPage() {
+  const { user } = useSelector((state) => state.auth);
   const [cart, setCart] = useState([]);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,7 +95,13 @@ export default function POSPage() {
     const { data } = await getBranchDropdown();
     if (data?.data) {
       setBranches(data.data);
-      if (data.data.length > 0) setSelectedBranch(data.data[0].id);
+      // Default to the user's assigned branch if it exists in the list, otherwise first branch
+      const userBranch = user?.assigned_branch;
+      if (userBranch && data.data.some(b => b.id === userBranch)) {
+        setSelectedBranch(userBranch);
+      } else if (data.data.length > 0) {
+        setSelectedBranch(data.data[0].id);
+      }
     }
   };
 
