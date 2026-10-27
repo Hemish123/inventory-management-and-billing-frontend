@@ -29,5 +29,8 @@ export const finalizeBill = (id, data = {}) =>
 export const discardDraft = (id) =>
   apiCall(() => api.delete(`/billing/${id}/discard/`));
 
+export const bulkDiscardDrafts = (ids) =>
+  apiCall(() => api.post('/billing/bulk-discard/', { ids }));
+
 export const updateBill = (id, data) =>
   apiCall(() => api.post(`/billing/${id}/update-bill/`, data));

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Navbar from '../../components/common/Navbar';
 import { createCustomer, getCustomer, updateCustomer } from '../../api/customerAPI';
+import { getBranchDropdown } from '../../api/coreAPI';
 import { Save, X, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
 
 const TABS = ['Other Details', 'Address', 'Contact Persons', 'Custom Fields', 'Reporting Tags', 'Remarks'];
@@ -39,7 +40,7 @@ const initialForm = {
   billing_street2: '', billing_city: '', billing_state: '', billing_zip: '',
   shipping_attention: '', shipping_country: 'India', shipping_street1: '',
   shipping_street2: '', shipping_city: '', shipping_state: '', shipping_zip: '',
-  contact_persons: [], remarks: '',
+  contact_persons: [], remarks: '', branch: '',
 };
 
 const emptyContact = { salutation: '', first_name: '', last_name: '', email: '', work_phone: '', mobile: '' };
@@ -52,13 +53,20 @@ export default function AddCustomer() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
+  const [branches, setBranches] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
+    loadBranches();
     if (isEdit) {
       loadCustomer();
     }
   }, [id]);
+
+  const loadBranches = async () => {
+    const { data } = await getBranchDropdown();
+    if (data?.data) setBranches(data.data);
+  };
 
   const loadCustomer = async () => {
     setFetching(true);
@@ -100,6 +108,7 @@ export default function AddCustomer() {
         shipping_zip: c.shipping_zip || '',
         contact_persons: c.contact_persons || [],
         remarks: c.remarks || '',
+        branch: c.branch || '',
       });
     } else {
       toast.error('Failed to load customer details');
@@ -160,6 +169,7 @@ export default function AddCustomer() {
     const name = form.display_name || `${form.first_name} ${form.last_name}`.trim() || form.company;
     const payload = { ...form, name, phone: form.work_phone || form.mobile, address: [form.billing_street1, form.billing_street2, form.billing_city, form.billing_state, form.billing_zip].filter(Boolean).join(', ') };
     if (!payload.opening_balance) delete payload.opening_balance;
+    if (!payload.branch) payload.branch = null;
     
     const { data, error } = isEdit 
       ? await updateCustomer(id, payload)
@@ -211,6 +221,16 @@ export default function AddCustomer() {
         <label className={labelCls}>Company Name</label>
         <input name="company" value={form.company} onChange={onChange} placeholder="Company Name" className={inputCls} />
       </div>
+      {/* Branch */}
+      {branches.length > 0 && (
+        <div>
+          <label className={labelCls}>Branch</label>
+          <select name="branch" value={form.branch} onChange={onChange} className={`${inputCls} bg-white`}>
+            <option value="">Select Branch (Optional)</option>
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        </div>
+      )}
       {/* Display Name */}
       <div>
         <label className={labelCls}>Display Name{reqStar}</label>

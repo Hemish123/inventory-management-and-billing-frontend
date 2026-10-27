@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { getCustomers, deleteCustomer } from '../api/customerAPI';
+import { getBranchDropdown } from '../api/coreAPI';
 import { setCustomers, setLoading } from '../store/customerSlice';
 import Navbar from '../components/common/Navbar';
 import Table from '../components/common/Table';
 import { SkeletonTable } from '../components/common/LoadingSpinner';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatDate } from '../utils/formatters';
-import { Search, ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Customers() {
@@ -17,14 +18,23 @@ export default function Customers() {
   const { customers, loading, filters, totalCount } = useSelector((s) => s.customers);
   const [search, setSearch] = useState(filters.search || '');
   const [page, setPage] = useState(1);
+  const [branch, setBranch] = useState('');
+  const [branches, setBranches] = useState([]);
   const debouncedSearch = useDebounce(search, 400);
 
-  useEffect(() => { loadCustomers(); }, [debouncedSearch, page]);
+  useEffect(() => { loadBranches(); }, []);
+  useEffect(() => { loadCustomers(); }, [debouncedSearch, page, branch]);
+
+  const loadBranches = async () => {
+    const { data } = await getBranchDropdown();
+    if (data?.data) setBranches(data.data);
+  };
 
   const loadCustomers = async () => {
     dispatch(setLoading(true));
     const params = { page, page_size: 20 };
     if (debouncedSearch) params.search = debouncedSearch;
+    if (branch) params.branch = branch;
     const { data } = await getCustomers(params);
     if (data?.data) dispatch(setCustomers(data.data));
     dispatch(setLoading(false));
@@ -52,6 +62,13 @@ export default function Customers() {
     { key: 'email', label: 'Email', sortable: true },
     { key: 'phone', label: 'Phone', sortable: false },
     { key: 'gstin', label: 'GSTIN', sortable: false },
+    { key: 'branch_name', label: 'Branch', sortable: true, render: (val) => (
+      val ? (
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-indigo-50 text-indigo-600">
+          {val}
+        </span>
+      ) : <span className="text-slate-300">—</span>
+    )},
     { key: 'created_at', label: 'Created', sortable: true, render: (val) => formatDate(val) },
     { key: 'actions', label: 'Actions', sortable: false, render: (_, row) => (
       <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -81,13 +98,26 @@ export default function Customers() {
               placeholder="Search by name, phone, or email..."
               className="input-field pl-10" />
           </div>
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <select
+              value={branch}
+              onChange={(e) => { setBranch(e.target.value); setPage(1); }}
+              className="input-field pl-10 pr-8 min-w-[180px] appearance-none bg-white cursor-pointer"
+            >
+              <option value="">All Branches</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
           <button onClick={() => navigate('/customers/add')} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap">
             <Plus className="w-4 h-4" /> Add Customer
           </button>
         </div>
 
         <div className="glass-card overflow-hidden">
-          {loading ? <div className="p-6"><SkeletonTable rows={8} cols={6} /></div> : (
+          {loading ? <div className="p-6"><SkeletonTable rows={8} cols={7} /></div> : (
             <Table columns={columns} data={customers || []}
               onRowClick={(row) => navigate(`/customers/edit/${row.id}`)} />
           )}
