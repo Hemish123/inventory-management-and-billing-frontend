@@ -100,10 +100,15 @@ export default function POSPage() {
       setBranches(data.data);
       // Default to the user's assigned branch if it exists in the list, otherwise first branch
       const userBranch = user?.assigned_branch;
+      let initialBranch = '';
       if (userBranch && data.data.some(b => b.id === userBranch)) {
-        setSelectedBranch(userBranch);
+        initialBranch = userBranch;
       } else if (data.data.length > 0) {
-        setSelectedBranch(data.data[0].id);
+        initialBranch = data.data[0].id;
+      }
+      if (initialBranch) {
+        setSelectedBranch(initialBranch);
+        loadCustomers(initialBranch);
       }
     }
   };
@@ -121,8 +126,10 @@ export default function POSPage() {
     }
   };
 
-  const loadCustomers = async () => {
-    const { data } = await getCustomerDropdown();
+  const loadCustomers = async (branchId) => {
+    const targetBranch = branchId || selectedBranch;
+    const params = targetBranch ? { branch: targetBranch } : {};
+    const { data } = await getCustomerDropdown(params);
     if (data?.data) setCustomersList(data.data);
   };
 
@@ -151,13 +158,22 @@ export default function POSPage() {
       name: newCustomerName.trim(),
       phone: newCustomerPhone.trim(),
       email: newCustomerEmail.trim(),
+      branch: selectedBranch || null,
     };
     const { data, error } = await createCustomer(payload);
     setAddingCustomer(false);
     if (data?.data) {
       toast.success(`Customer "${newCustomerName}" added!`);
       const newCust = data.data;
-      setCustomersList(prev => [...prev, { id: newCust.id, name: newCust.name, phone: newCust.phone || '', email: newCust.email || '', gstin: newCust.gstin || '', address: newCust.address || '' }]);
+      setCustomersList(prev => [...prev, {
+        id: newCust.id,
+        name: newCust.name,
+        phone: newCust.phone || '',
+        email: newCust.email || '',
+        gstin: newCust.gstin || '',
+        address: newCust.address || '',
+        branch: newCust.branch || null,
+      }]);
       setSelectedCustomerId(newCust.id);
       setCustomerName(newCust.name);
       setCustomerPhone(newCust.phone || '');
@@ -853,7 +869,15 @@ export default function POSPage() {
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-slate-800 text-xs">Customer Details</h3>
-                  <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="text-[11px] bg-slate-100 text-slate-600 border border-slate-200 rounded px-1.5 py-0.5 outline-none font-bold">
+                  <select
+                    value={selectedBranch}
+                    onChange={e => {
+                      const newBranch = e.target.value;
+                      setSelectedBranch(newBranch);
+                      loadCustomers(newBranch);
+                    }}
+                    className="text-[11px] bg-slate-100 text-slate-600 border border-slate-200 rounded px-1.5 py-0.5 outline-none font-bold cursor-pointer"
+                  >
                     {branches.map(b => <option key={b.id} value={b.id}>{b.code}</option>)}
                   </select>
                 </div>
@@ -1204,6 +1228,14 @@ export default function POSPage() {
       {showAddCustomer && (
         <Modal title="Add New Customer" onClose={() => { setShowAddCustomer(false); setNewCustomerName(''); setNewCustomerPhone(''); setNewCustomerEmail(''); }}>
           <div className="p-5 space-y-4">
+            {selectedBranch && (
+              <div className="px-3.5 py-2.5 bg-indigo-50/80 border border-indigo-100 rounded-xl flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-600">Branch:</span>
+                <span className="font-bold text-indigo-700 bg-white px-2.5 py-0.5 rounded-lg border border-indigo-200 shadow-sm">
+                  {branches.find(b => String(b.id) === String(selectedBranch))?.name || 'Selected Branch'}
+                </span>
+              </div>
+            )}
             <div>
               <label className="text-xs font-semibold text-slate-600 mb-1 block">Name *</label>
               <input type="text" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)}

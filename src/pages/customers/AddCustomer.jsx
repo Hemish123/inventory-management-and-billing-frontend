@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import Navbar from '../../components/common/Navbar';
 import { createCustomer, getCustomer, updateCustomer } from '../../api/customerAPI';
@@ -51,6 +52,7 @@ export default function AddCustomer() {
   const [activeTab, setActiveTab] = useState(0);
   const [form, setForm] = useState({ ...initialForm });
   const [errors, setErrors] = useState({});
+  const user = useSelector(s => s.auth.user);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
   const [branches, setBranches] = useState([]);
@@ -65,7 +67,12 @@ export default function AddCustomer() {
 
   const loadBranches = async () => {
     const { data } = await getBranchDropdown();
-    if (data?.data) setBranches(data.data);
+    if (data?.data) {
+      setBranches(data.data);
+      if (!isEdit && user?.assigned_branch) {
+        setForm(prev => prev.branch ? prev : ({ ...prev, branch: user.assigned_branch }));
+      }
+    }
   };
 
   const loadCustomer = async () => {

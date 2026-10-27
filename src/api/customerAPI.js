@@ -15,5 +15,5 @@ export const updateCustomer = (id, data) =>
 export const deleteCustomer = (id) =>
   apiCall(() => api.delete(`/customers/${id}/`));
 
-export const getCustomerDropdown = () =>
-  apiCall(() => api.get('/customers/dropdown/'));
+export const getCustomerDropdown = (params = {}) =>
+  apiCall(() => api.get('/customers/dropdown/', { params }));
