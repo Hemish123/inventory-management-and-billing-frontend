@@ -6,6 +6,7 @@ import Table from '../../components/common/Table';
 import { SkeletonTable } from '../../components/common/LoadingSpinner';
 import { getBills, voidBill, deleteBill } from '../../api/billingAPI';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
+import { useDebounce } from '../../hooks/useDebounce';
 import { Search, Info, XCircle, FileText, PlayCircle, Pencil, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -17,12 +18,14 @@ export default function BillsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [selectedBillForBreakdown, setSelectedBillForBreakdown] = useState(null);
   const navigate = useNavigate();
+  const debouncedSearch = useDebounce(search, 400);
 
-  useEffect(() => { loadBills(); }, [page]);
+  useEffect(() => { loadBills(); }, [debouncedSearch, page]);
 
   const loadBills = async () => {
     setLoading(true);
     const params = { page, page_size: 20 };
+    if (debouncedSearch) params.search = debouncedSearch;
     const { data } = await getBills(params);
     if (data?.data) {
       if (Array.isArray(data.data)) {
@@ -32,6 +35,9 @@ export default function BillsPage() {
         setBills(data.data.results || []);
         setTotalCount(data.data.count || 0);
       }
+    } else {
+      setBills([]);
+      setTotalCount(0);
     }
     setLoading(false);
   };
@@ -44,17 +50,11 @@ export default function BillsPage() {
   };
 
   const handleDelete = async (id, billNumber) => {
-    if (!window.confirm(`Delete bill ${billNumber} completely? This will restore stock.`)) return;
+    if (!window.confirm(`Delete bill ${billNumber}? Completely? This will restore stock.`)) return;
     const { error } = await deleteBill(id);
     if (error) toast.error(error);
     else { toast.success(`Bill ${billNumber} deleted`); loadBills(); }
   };
-
-  const filtered = bills.filter(b =>
-    b.bill_number?.toLowerCase().includes(search.toLowerCase()) ||
-    b.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-    b.cashier_name?.toLowerCase().includes(search.toLowerCase())
-  );
 
   const columns = [
     { key: 'bill_number', label: 'Bill #', sortable: true, render: v => (
@@ -121,12 +121,12 @@ export default function BillsPage() {
       <div className="p-6 space-y-6">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search by bill, customer, or cashier..." className="input-field pl-10" />
         </div>
         <div className="glass-card overflow-hidden">
           {loading ? <div className="p-6"><SkeletonTable rows={8} cols={7} /></div> : (
-            <Table columns={columns} data={filtered} />
+            <Table columns={columns} data={bills} />
           )}
         </div>
 

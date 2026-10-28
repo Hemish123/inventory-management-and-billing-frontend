@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import Barcode from 'react-barcode';
 import { jsPDF } from 'jspdf';
 import JsBarcode from 'jsbarcode';
+import { useDebounce } from '../../hooks/useDebounce';
 
 /* ═══════════════════════════════════════════════════════════════════
  * Thermal label roll engine — TSC TA220 · 203 dpi · 2-up · 50×25 mm
@@ -468,6 +469,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const debouncedSearch = useDebounce(search, 300);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -499,12 +501,12 @@ export default function ProductsPage() {
   });
   const [stockModal, setStockModal] = useState({ isOpen: false, product: null, stocks: [], loading: false });
 
-  useEffect(() => { loadProducts(); loadDropdowns(); }, []);
+  useEffect(() => { loadDropdowns(); }, []);
 
   const loadProducts = async () => {
     setLoading(true);
     const params = { page, page_size: 20 };
-    if (search) params.search = search;
+    if (debouncedSearch) params.search = debouncedSearch;
     const { data } = await getProducts(params);
     if (data?.data) {
       if (Array.isArray(data.data)) {
@@ -514,6 +516,9 @@ export default function ProductsPage() {
         setProducts(data.data.results || []);
         setTotalCount(data.data.count || 0);
       }
+    } else {
+      setProducts([]);
+      setTotalCount(0);
     }
     setLoading(false);
   };
@@ -531,7 +536,7 @@ export default function ProductsPage() {
     }
   };
 
-  useEffect(() => { loadProducts(); }, [search, page]);
+  useEffect(() => { loadProducts(); }, [debouncedSearch, page]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -818,7 +823,7 @@ export default function ProductsPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
             <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search or scan barcode..." className="input-field pl-10 font-mono text-sm" autoFocus />
           </div>
           <div className="flex gap-2">
