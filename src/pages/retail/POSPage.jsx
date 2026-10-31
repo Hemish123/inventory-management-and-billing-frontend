@@ -52,6 +52,7 @@ export default function POSPage() {
   const [discountType, setDiscountType] = useState('NONE');
   const [discountValue, setDiscountValue] = useState(0);
   const [manualRoundOff, setManualRoundOff] = useState('');
+  const [roundOffSign, setRoundOffSign] = useState('-');
   const [notes, setNotes] = useState('');
   
   const [submitting, setSubmitting] = useState(false);
@@ -380,6 +381,7 @@ export default function POSPage() {
     setSplitCard('');
     setDiscountValue(0);
     setManualRoundOff('');
+    setRoundOffSign('-');
     setNotes('');
     setActiveDraftId(null);
     setActiveEditId(null);
@@ -420,8 +422,9 @@ export default function POSPage() {
 
   const preRoundTotal = subtotal + taxTotal - overallDisc;
   const roundOffVal = parseFloat(manualRoundOff) || 0;
-  const grandTotal = Math.max(0, preRoundTotal - roundOffVal);
-  const roundOff = -roundOffVal;
+  const signedRoundOff = roundOffSign === '+' ? roundOffVal : -roundOffVal;
+  const grandTotal = Math.max(0, preRoundTotal + signedRoundOff);
+  const roundOff = signedRoundOff;
   
   const splitTotal = (parseFloat(splitCash)||0) + (parseFloat(splitUpi)||0) + (parseFloat(splitCard)||0);
   const actualAmountReceived = paymentMethod === 'SPLIT' ? splitTotal : (parseFloat(amountReceived) || grandTotal);
@@ -556,7 +559,9 @@ export default function POSPage() {
       setCustomerPhone(bill.customer_phone);
       setDiscountType(bill.discount_type || 'NONE');
       setDiscountValue(bill.discount_type === 'PERCENTAGE' ? parseFloat(bill.discount_percentage) : parseFloat(bill.discount_amount));
-      setManualRoundOff(parseFloat(bill.round_off || 0) !== 0 ? Math.abs(parseFloat(bill.round_off)).toString() : '');
+      const savedRoundOff = parseFloat(bill.round_off || 0);
+      setManualRoundOff(savedRoundOff !== 0 ? Math.abs(savedRoundOff).toString() : '');
+      setRoundOffSign(savedRoundOff >= 0 ? '+' : '-');
       setNotes(bill.notes);
       setActiveDraftId(bill.id);
       setSelectedSalesPerson(bill.salesperson_id ? String(bill.salesperson_id) : '');
@@ -591,7 +596,9 @@ export default function POSPage() {
       setCustomerPhone(bill.customer_phone);
       setDiscountType(bill.discount_type || 'NONE');
       setDiscountValue(bill.discount_type === 'PERCENTAGE' ? parseFloat(bill.discount_percentage) : parseFloat(bill.discount_amount));
-      setManualRoundOff(parseFloat(bill.round_off || 0) !== 0 ? Math.abs(parseFloat(bill.round_off)).toString() : '');
+      const savedRoundOff2 = parseFloat(bill.round_off || 0);
+      setManualRoundOff(savedRoundOff2 !== 0 ? Math.abs(savedRoundOff2).toString() : '');
+      setRoundOffSign(savedRoundOff2 >= 0 ? '+' : '-');
       setNotes(bill.notes);
       setActiveEditId(bill.id);
       if (bill.branch) setSelectedBranch(bill.branch);
@@ -960,7 +967,18 @@ export default function POSPage() {
               <div className="bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-center justify-between gap-2 shadow-sm">
                 <span className="text-xs font-bold text-amber-800 whitespace-nowrap">Round Off</span>
                 <div className="flex items-center gap-1.5 flex-1">
-                  <span className="text-xs font-bold text-amber-600">−₹</span>
+                  <button
+                    type="button"
+                    onClick={() => setRoundOffSign(s => s === '-' ? '+' : '-')}
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black border transition-all shrink-0 ${
+                      roundOffSign === '+'
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200'
+                        : 'bg-rose-100 text-rose-700 border-rose-300 hover:bg-rose-200'
+                    }`}
+                    title={roundOffSign === '-' ? 'Subtract from total (click to switch to add)' : 'Add to total (click to switch to subtract)'}
+                  >
+                    {roundOffSign === '+' ? '+' : '−'}
+                  </button>
                   <input type="number" value={manualRoundOff} onChange={e => setManualRoundOff(e.target.value)} className="flex-1 input-field bg-white py-1 text-xs px-2 border-amber-200 shadow-sm font-semibold text-right focus:border-amber-400" placeholder="0" min="0" step="0.01" />
                 </div>
               </div>
@@ -1016,7 +1034,7 @@ export default function POSPage() {
               <div className="flex justify-between items-center"><span>Subtotal</span><span className="text-slate-800 font-semibold">{formatCurrency(subtotal)}</span></div>
               <div className="flex justify-between items-center"><span>Tax (GST)</span><span className="text-slate-800 font-semibold">{formatCurrency(taxTotal)}</span></div>
               {overallDisc > 0 && <div className="flex justify-between items-center text-rose-500"><span>Discount</span><span className="font-semibold">-{formatCurrency(overallDisc)}</span></div>}
-              {roundOffVal > 0 && <div className="flex justify-between items-center text-amber-600"><span>Round Off</span><span className="font-semibold">-{formatCurrency(roundOffVal)}</span></div>}
+              {roundOffVal > 0 && <div className={`flex justify-between items-center ${roundOffSign === '+' ? 'text-emerald-600' : 'text-amber-600'}`}><span>Round Off</span><span className="font-semibold">{roundOffSign === '+' ? '+' : '-'}{formatCurrency(roundOffVal)}</span></div>}
             </div>
             
             <div className="flex justify-between items-end mb-3 pt-2 border-t border-slate-200">
